@@ -188,6 +188,7 @@ function updateCustomer(state, c, dt) {
     if (c.timer <= 0) {
       c.ordered = pickOrder(state);
       c.orders = c.ordered.slice();
+      c.orderedAt = state.time; // the order bubble pops up from this moment
       c.step = 'toSeat';
       c.queueIndex = -1;
       var seat = getSeatOf(state, c);
@@ -281,6 +282,7 @@ function handOver(state, c, item) {
   addFloater(state, (c.vip ? '★ +' : '+') + formatNumber(amount), c.x, c.y - 1, CONFIG.colors.earn);
   if (c.served) addFloater(state, '♥', c.x + 0.5, c.y - 0.6, CONFIG.colors.heart);
   spawnCoinBurst(state, c.x, c.y - 0.4, amount, c.vip);
+  if (state.events) state.events.push({ type: 'pay', vip: c.vip }); // for the coin sound
   return amount;
 }
 

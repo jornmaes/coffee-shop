@@ -27,8 +27,9 @@ function makeSaveData(state) {
     machines: state.machines,
     carrying: state.carrying,
     stats: state.stats,
+    settings: state.settings,
     player: { x: state.player.x, y: state.player.y },
-    lastSeen: Date.now(), // when we last saved; used for offline earnings later
+    lastSeen: Date.now(), // when we last saved
   };
 }
 
@@ -105,6 +106,12 @@ function loadGame(state) {
   // stats
   if (data.stats && isGoodNumber(data.stats.served)) {
     state.stats.served = Math.max(0, Math.floor(data.stats.served));
+  }
+  // settings: only real true/false values (anything else keeps the default)
+  if (data.settings && typeof data.settings === 'object') {
+    ['sound', 'music', 'keepAwake'].forEach(function (key) {
+      if (typeof data.settings[key] === 'boolean') state.settings[key] = data.settings[key];
+    });
   }
   if (data.stats && isGoodNumber(data.stats.helperEarned)) {
     state.stats.helperEarned = Math.max(0, data.stats.helperEarned);

@@ -11,6 +11,7 @@ var fails = 0, passes = 0;
 function check(name, ok) { if (!ok) { console.log('FAIL ' + name); fails++; } else passes++; }
 function fresh() {
   return { cash: C.start.cash, time: 0, bought: {}, builtAt: {}, machines: {}, carrying: [], stats: { served: 0, helperEarned: 0 },
+           settings: { sound: true, music: true, keepAwake: true },
            customers: [], nextCustomerId: 1, spawnTimer: 2, floaters: [], coins: [],
            player: { x: C.player.startX, y: C.player.startY, radius: R, faceX: 0, faceY: 1 } };
 }
@@ -39,6 +40,15 @@ check('player position restored', b.player.x === 20 && b.player.y === 11);
 check('loaded items are solid', ctx.solidRects.length === ctx.wallRects.length + 3);
 check('no customers after loading', b.customers.length === 0);
 check('helper earnings restored', b.stats.helperEarned === 0 && load({ stats: { served: 1, helperEarned: 1234.5 } }).s.stats.helperEarned === 1234.5);
+check('settings default to on', b.settings.sound && b.settings.music && b.settings.keepAwake);
+check('settings restored', (function () {
+  var st = load({ settings: { sound: false, music: true, keepAwake: false } }).s.settings;
+  return st.sound === false && st.music === true && st.keepAwake === false;
+})());
+check('bad settings ignored (defaults kept)', (function () {
+  var st = load({ settings: { sound: 'no', music: 0, keepAwake: null } }).s.settings;
+  return st.sound === true && st.music === true && st.keepAwake === true;
+})());
 check('bad helper earnings ignored', load({ stats: { served: 1, helperEarned: -5 } }).s.stats.helperEarned === 0 &&
   load({ stats: { served: 1, helperEarned: 'lots' } }).s.stats.helperEarned === 0);
 

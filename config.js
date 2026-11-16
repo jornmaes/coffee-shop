@@ -163,6 +163,13 @@ var CONFIG = {
     holdSeconds: 2,    // stand on a pad this long to buy it (a ring fills up around the pad)
   },
 
+  // --- Sound (made in code, no sound files; switch on/off in ⚙) ---
+  sound: {
+    effectsVolume: 0.5, // loudness of coins, pops and chimes (0 = silent, 1 = full)
+    musicVolume: 0.35,  // loudness of the background music (0 = silent, 1 = full)
+    musicBpm: 66,       // music speed, in beats per minute (lower = calmer)
+  },
+
   // --- Testing ---
   // Open the game as index.html?cheat to get money buttons in the ⚙ settings.
   cheat: {
@@ -541,6 +548,9 @@ var CONFIG = {
     confettiCount: 70,   // confetti pieces when a new area opens
     confettiTime: 1.8,   // seconds confetti stays around
     bannerSeconds: 3.2,  // how long the "now open" / "new on the menu" banner shows
+    bubblePopTime: 0.3,  // seconds an order bubble takes to pop up
+    cashRollSpeed: 8,    // how fast the cash display counts up to the real amount (higher = faster)
+    butterflies: 5,      // butterflies fluttering over the grass outside
   },
 
   // --- Colors used when drawing the world ---

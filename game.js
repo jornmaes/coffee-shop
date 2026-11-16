@@ -15,6 +15,13 @@ var state = {
   stats: { served: 0,       // how many customers have been served (ever)
            helperEarned: 0 }, // coins helpers earned by handing things over (ever)
 
+  settings: {               // switches in the ⚙ panel (saved)
+    sound: true,            // sound effects
+    music: true,            // background music
+    keepAwake: true,        // keep the phone's screen on while the game is open
+  },
+  events: [],               // things that just happened, for sounds (e.g. a customer paid)
+
   customers: [],            // customers in the shop right now (not saved)
   helpers: [],              // hired helpers (not saved: they come back from the bought pads)
   nextCustomerId: 1,
@@ -56,8 +63,19 @@ function cashText(n) {
 // Show cash, cozy bonus and the current hint in the HUD.
 // We only touch the page when something changed (cheaper on phones).
 var lastHud = {};
+// The cash number on screen counts smoothly toward the real amount
+// (see rollCash), instead of jumping.
+var shownCash = 0;
+
+// Move the shown cash a bit closer to the real cash (called every frame).
+function rollCash(dt) {
+  var diff = state.cash - shownCash;
+  shownCash += diff * Math.min(1, dt * CONFIG.effects.cashRollSpeed);
+  if (Math.abs(state.cash - shownCash) < 0.5) shownCash = state.cash;
+}
+
 function updateHud(coinsArrived) {
-  var text = '☕ ' + cashText(state.cash);
+  var text = '☕ ' + cashText(shownCash);
   if (text !== lastHud.cash) { cashEl.textContent = text; lastHud.cash = text; }
 
   var cozy = getCozyBonus(state);
@@ -228,6 +246,108 @@ function celebratePurchase(state, pad) {
   }
 }
 
+// ---------- Sounds for what just happened ----------
+
+// Play a sound for a purchase, depending on what was bought.
+function soundForPurchase(pad) {
+  var type = pad.builds.type;
+  if (type === 'expansion') playChime(true);
+  else if (type === 'upgrade') playUpgrade();
+  else if (type === 'helper') playHire();
+  else {
+    playBuild();
+    if (pad.builds.makes) playChime(false); // new on the menu!
+  }
+}
+
+// Play sounds for the events of this frame (customers paying), then forget them.
+function playEventSounds() {
+  state.events.forEach(function (e) {
+    if (e.type === 'pay') playCoin(e.vip);
+  });
+  state.events.length = 0;
+}
+
+// ---------- Keep the screen on ----------
+// Phones dim and lock the screen after a while. With "Keep screen on"
+// the game asks the browser to keep it awake (Screen Wake Lock), so you
+// can leave the café running. Not every browser can do this (it also
+// needs the page to come from https:// or localhost, not a file).
+
+var wakeLock = null;
+var canKeepAwake = 'wakeLock' in navigator && window.isSecureContext;
+
+// Ask for (or let go of) the wake lock, to match the setting.
+function updateWakeLock() {
+  if (!canKeepAwake) return;
+  var want = state.settings.keepAwake && document.visibilityState === 'visible';
+  if (want && !wakeLock) {
+    navigator.wakeLock.request('screen').then(function (lock) {
+      wakeLock = lock;
+      // the browser drops it by itself when the page is hidden
+      lock.addEventListener('release', function () { wakeLock = null; });
+    }).catch(function () { /* not allowed right now: try again later */ });
+  } else if (!want && wakeLock) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+}
+
+// ---------- Settings switches and the mute button ----------
+
+var togglesEl = document.getElementById('toggles');
+var muteBtn = document.getElementById('mute-btn');
+var TOGGLES = [
+  { key: 'sound', label: '🔔 Sound effects' },
+  { key: 'music', label: '🎵 Music' },
+  { key: 'keepAwake', label: '☀️ Keep screen on' },
+];
+
+// Make one switch button per setting.
+function setUpToggles() {
+  TOGGLES.forEach(function (t) {
+    var btn = document.createElement('button');
+    btn.className = 'toggle';
+    btn.innerHTML = '<span></span><span class="pill"></span>';
+    btn.firstChild.textContent = t.label;
+    btn.addEventListener('click', function () {
+      state.settings[t.key] = !state.settings[t.key];
+      settingsChanged();
+    });
+    t.button = btn;
+    togglesEl.appendChild(btn);
+  });
+  muteBtn.addEventListener('click', function () {
+    // one tap silences everything; the next tap brings both back
+    var anyOn = state.settings.sound || state.settings.music;
+    state.settings.sound = !anyOn;
+    state.settings.music = !anyOn;
+    startAudio(); // (a tap is allowed to start sound)
+    settingsChanged();
+  });
+  refreshToggles();
+}
+
+// Show each switch as ON or OFF, and the right mute icon.
+function refreshToggles() {
+  TOGGLES.forEach(function (t) {
+    var on = state.settings[t.key];
+    var unavailable = t.key === 'keepAwake' && !canKeepAwake;
+    t.button.classList.toggle('on', on && !unavailable);
+    t.button.disabled = unavailable;
+    t.button.lastChild.textContent = unavailable ? 'n/a' : (on ? 'ON' : 'OFF');
+  });
+  muteBtn.textContent = state.settings.sound || state.settings.music ? '🔊' : '🔇';
+}
+
+// A switch was flipped: update sound, the screen lock, the buttons, and save.
+function settingsChanged() {
+  applySoundSettings();
+  updateWakeLock();
+  refreshToggles();
+  save();
+}
+
 // ---------- Settings panel ----------
 
 var settingsEl = document.getElementById('settings');
@@ -359,9 +479,12 @@ function update(dt) {
   if (bought) {
     repathCustomers(state); // nobody walks through the new item
     celebratePurchase(state, bought);
+    soundForPurchase(bought);
   }
   var picked = tryPickup(state);
+  if (picked) playPickup();
   var served = tryDeliver(state);
+  playEventSounds();
 
   // save straight away after the important moments, and every few seconds
   timeSinceSave += dt;
@@ -394,6 +517,7 @@ function loop(now) {
   lastTime = now;
 
   var arrived = state.paused ? 0 : update(dt);
+  rollCash(dt);
   drawWorld(state);
   updateHud(arrived);
   updateBanner();
@@ -406,11 +530,26 @@ window.addEventListener('orientationchange', onResize);
 // Save when the player leaves: switching apps, locking the phone, closing the tab.
 // (Phones often kill a page in the background without warning, so this matters.)
 document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'hidden') save();
+  var hidden = document.visibilityState === 'hidden';
+  if (hidden) save();
+  pauseAudio(hidden);  // no music from a phone in your pocket
+  updateWakeLock();    // the screen lock comes back when you return
 });
+
+// Sound may only start after a touch or key press (a browser rule).
+// The wake lock likes a touch too.
+function onFirstTouch() {
+  startAudio();
+  updateWakeLock();
+}
+window.addEventListener('pointerdown', onFirstTouch);
+window.addEventListener('keydown', onFirstTouch);
 window.addEventListener('pagehide', save);
 
 rebuildSolids(state); // walls only, for a new game
 loadGame(state);      // bring back saved progress, if any (also rebuilds solids)
+shownCash = state.cash; // start the cash display at the right number
+setUpToggles();
+updateWakeLock();
 onResize();
 requestAnimationFrame(loop);

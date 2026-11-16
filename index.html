@@ -18,7 +18,10 @@
       <div id="cash">☕ 0</div>
       <div id="cozy"></div>
     </div>
-    <button id="settings-btn" aria-label="Settings">⚙</button>
+    <div id="buttons">
+      <button id="mute-btn" aria-label="Sound on or off">🔊</button>
+      <button id="settings-btn" aria-label="Settings">⚙</button>
+    </div>
     <!-- "What to do next" tip for new players -->
     <div id="hint"></div>
     <!-- Big celebration banner ("Bakery Corner is open!") -->
@@ -32,7 +35,12 @@
   <div id="settings" hidden>
     <div class="panel">
       <h2>Your café</h2>
+      <!-- Two columns side by side in landscape: stats | switches and buttons -->
+      <div class="panel-cols">
       <ul id="stats"></ul>
+      <div>
+      <!-- On/off switches (filled in by game.js) -->
+      <div id="toggles"></div>
       <!-- Testing only: shown when the page is opened as index.html?cheat -->
       <div id="cheats" hidden>
         <p class="cheat-title">🧪 Testing: add money</p>
@@ -47,6 +55,8 @@
           <button id="reset-no" class="btn">Keep playing</button>
           <button id="reset-yes" class="btn btn-danger">Yes, start over</button>
         </div>
+      </div>
+      </div>
       </div>
       <button id="settings-close" class="btn btn-main">Back to the café</button>
     </div>
@@ -69,6 +79,7 @@
   <script src="render.js"></script>
   <script src="art.js"></script>
   <script src="input.js"></script>
+  <script src="sound.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

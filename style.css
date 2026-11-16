@@ -96,7 +96,8 @@ html, body {
   transform: translate(-50%, 0);
 }
 
-#settings-btn {
+#buttons { display: flex; gap: 8px; }
+#settings-btn, #mute-btn {
   pointer-events: auto;
   width: 44px;
   height: 44px;
@@ -156,7 +157,7 @@ html, body {
   color: var(--coffee);
   border-radius: 20px;
   padding: 14px 20px 16px;
-  width: min(380px, 100%);
+  width: min(640px, 100%);
   max-height: 100%;
   overflow-y: auto;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -164,6 +165,10 @@ html, body {
 }
 .panel h2 { margin: 2px 0 8px; font-size: 20px; }
 .panel p { font-size: 14px; margin: 6px 0 10px; }
+.panel-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; }
+.panel-cols #reset-ask, .panel-cols #reset-confirm { text-align: center; }
+/* narrow screens: one column */
+@media (max-width: 560px) { .panel-cols { grid-template-columns: 1fr; gap: 0; } }
 #stats { list-style: none; margin: 0 0 10px; padding: 0; font-size: 14px; }
 #stats li { display: flex; justify-content: space-between; padding: 3px 4px; border-bottom: 1px dashed #e3d2b8; }
 .row { display: flex; gap: 8px; justify-content: center; }
@@ -182,6 +187,24 @@ html, body {
 .btn-main { background: var(--green-dark); color: #fff6e8; width: 100%; margin-top: 10px; }
 .btn-soft { background: transparent; color: #b5523b; text-decoration: underline; }
 .btn-danger { background: #c4574a; color: #fff6e8; }
+
+/* On/off switches in the settings */
+#toggles { display: flex; flex-direction: column; gap: 6px; margin: 0 0 6px; }
+.toggle {
+  display: flex; justify-content: space-between; align-items: center;
+  min-height: 44px; padding: 0 14px;
+  border: none; border-radius: 14px;
+  font: inherit; font-size: 15px; font-weight: 600;
+  background: #f3e8d6; color: var(--coffee);
+  cursor: pointer;
+}
+.toggle .pill {
+  min-width: 52px; padding: 4px 10px; border-radius: 999px;
+  font-size: 13px; font-weight: 800;
+  background: #c9b9a3; color: #fff6e8;
+}
+.toggle.on .pill { background: var(--green-dark); }
+.toggle:disabled { opacity: 0.55; cursor: default; }
 
 /* Testing money buttons (only with ?cheat in the address) */
 #cheats { margin: 0 0 10px; padding: 8px; border-radius: 14px; background: #f3e6f7; }

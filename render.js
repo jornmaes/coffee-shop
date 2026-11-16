@@ -359,6 +359,8 @@ function drawCharacters(state) {
     var s = worldToScreen(ch.x, ch.y);
     var r = ch.radius * camera.scale;
     var bob = ch.moving ? Math.abs(Math.sin(ch.walkTime * 12)) * r * 0.15 : 0;
+    // seated customers sway gently, as if humming along (each to their own beat)
+    if (ch.step === 'waiting' || ch.step === 'drinking') bob = (Math.sin(state.time * 2.2 + ch.id) + 1) * r * 0.05;
     if (ch === state.player) {
       var col = CONFIG.colors;
       drawCharacter(s.x, s.y, r,
@@ -408,11 +410,18 @@ function drawBubblesAndCarried(state) {
       var hasIt = c.orders.some(function (o) { return state.carrying.indexOf(o) !== -1; });
       var bounce = c.step === 'waiting' ? Math.abs(Math.sin(state.time * 3 + c.id)) * k * 0.08 : 0;
       var n = c.orders.length;
+      // a freshly placed order pops up from the tail of the bubble
+      var grow = bubbleScale(state, c);
+      ctx.save();
+      ctx.translate(s.x, top);
+      ctx.scale(grow, grow);
+      ctx.translate(-s.x, -top);
       drawBubble(s.x, top - bounce, k, n, hasIt, function (cx, cy, size) {
         c.orders.forEach(function (item, i) {
           drawMenuItem(item, cx + (i - (n - 1) / 2) * size * 1.05, cy, size * 0.95);
         });
       });
+      ctx.restore();
     }
   });
 
@@ -435,6 +444,48 @@ function drawBubblesAndCarried(state) {
     fillCircle(ps.x + dx, dy, k * 0.3, 'rgba(255, 250, 242, 0.85)');
     drawMenuItem(item, ps.x + dx, dy, k * 0.5);
   });
+}
+
+// How big an order bubble is: grows from 0 to 1 (with a little overshoot)
+// in CONFIG.effects.bubblePopTime seconds after the customer ordered.
+function bubbleScale(state, c) {
+  if (c.orderedAt === undefined) return 1;
+  var t = Math.min(1, (state.time - c.orderedAt) / CONFIG.effects.bubblePopTime);
+  var back = 1.7; // same bouncy "ease out back" curve as items popping in
+  return Math.max(0.01, 1 + (back + 1) * Math.pow(t - 1, 3) + back * Math.pow(t - 1, 2));
+}
+
+// Butterflies fluttering over the grass outside the shop. Each one drifts
+// in slow loops around its own spot, flapping its wings.
+// (Their spots are spread around the edges of the world, on the grass.)
+var BUTTERFLY_SPOTS = [
+  { x: 4, y: 6 }, { x: 15, y: 27 }, { x: 47, y: 27 }, { x: 55, y: 8 }, { x: 24, y: 2 },
+  { x: 3, y: 25 }, { x: 56, y: 22 }, { x: 44, y: 3 },
+];
+function drawButterflies(state) {
+  var k = camera.scale, t = state.time;
+  var count = Math.min(CONFIG.effects.butterflies, BUTTERFLY_SPOTS.length);
+  for (var i = 0; i < count; i++) {
+    var spot = BUTTERFLY_SPOTS[i];
+    // a slow figure-of-eight around the spot
+    var x = spot.x + Math.sin(t * 0.31 + i * 1.7) * 2.2;
+    var y = spot.y + Math.sin(t * 0.53 + i * 2.3) * 1.1;
+    var s = worldToScreen(x, y);
+    if (s.x < -k || s.y < -k || s.x > window.innerWidth + k || s.y > window.innerHeight + k) continue;
+    var flap = 0.45 + 0.55 * Math.abs(Math.sin(t * 9 + i)); // wings open and close
+    var size = k * 0.26;
+    var color = CONFIG.colors.confetti[i % CONFIG.colors.confetti.length];
+    // a tiny shadow on the grass below
+    ctx.globalAlpha = 0.15;
+    fillEllipse(s.x, s.y + k * 0.5, size, size * 0.35, '#000000');
+    ctx.globalAlpha = 1;
+    // two wings on each side, then the body
+    fillEllipse(s.x - size * 0.7 * flap, s.y - size * 0.3, size * 0.8 * flap, size * 0.7, color);
+    fillEllipse(s.x + size * 0.7 * flap, s.y - size * 0.3, size * 0.8 * flap, size * 0.7, color);
+    fillEllipse(s.x - size * 0.5 * flap, s.y + size * 0.4, size * 0.55 * flap, size * 0.5, color);
+    fillEllipse(s.x + size * 0.5 * flap, s.y + size * 0.4, size * 0.55 * flap, size * 0.5, color);
+    fillEllipse(s.x, s.y, size * 0.18, size * 0.75, '#3b2a20');
+  }
 }
 
 // Coins: first they pop out of the customer (moving in the world), then
@@ -570,6 +621,7 @@ function drawWorld(state) {
   drawCharacters(state);
   drawPadLabels(state);         // on top, so furniture never hides them
   drawBubblesAndCarried(state);
+  drawButterflies(state);       // flying, so above people and furniture
   drawFloaters(state);
   drawConfetti(state);
   drawCoins(state);

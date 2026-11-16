@@ -80,13 +80,16 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
 - **No fail states.** Nothing is ever lost: customers wait patiently forever and
   never leave angry, wrong drinks do nothing, money never goes negative.
   The worst case is "progress is slower".
-- **Short play sessions.** Opening the game for a few minutes should feel good:
-  serve a few customers, buy the next pad. Helpers and offline earnings
-  (later parts) reward coming back.
+- **Put it up and zone away.** The game is meant to run on a phone propped up
+  nearby: helpers keep serving, calm music plays, the screen stays on, and
+  you step in now and then to buy the next pad. Short sessions feel good
+  too: serve a few customers, buy the next pad. There are **no offline
+  earnings**: the café only works while the game is open.
 - **Onboarding:** a small hint bar tells new players what to do next, until
   they've served a few customers.
-- **Settings (⚙):** pauses the game, shows a few stats, and has **Reset
-  progress** (asks for confirmation first).
+- **Settings (⚙):** pauses the game, shows a few stats, has switches for
+  **Sound effects**, **Music** and **Keep screen on**, and **Reset progress**
+  (asks for confirmation first). A 🔊 button next to ⚙ mutes everything.
 - Calm, cute tone: soft colors, rounded shapes, gentle animations, no pressure.
 
 ## Tech
@@ -109,6 +112,13 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   no extra buttons.
 - **Graphics:** everything is drawn with simple canvas shapes (no image files)
   in a cute, rounded style. Drawing code lives in `art.js`.
+- **Sound:** made in code with the Web Audio API (no sound files), in
+  `sound.js`: coin clinks, pops, chimes, and endless calm background music
+  (soft chords, a slow bass and a random pentatonic melody with an echo).
+  Browsers only allow sound after the first touch or key press. Sound
+  pauses while the page is hidden.
+- **Keep screen on** uses the Screen Wake Lock API; it needs `https://` or
+  `localhost` (not every browser supports it; the switch shows "n/a" then).
 - **The map is bigger than the screen** (areas side by side); the camera follows
   the barista and only what's on screen is drawn. Walls are generated from
   the areas in config; a door is cut into a wall when its area opens.
@@ -171,6 +181,7 @@ size, starting cash, effects.
   - `art.js`: how everything looks (menu items, machines, furniture, decor, characters)
   - `render.js`: the camera and drawing each frame in the right order
   - `input.js`: joystick and keyboard
+  - `sound.js`: sound effects and background music (Web Audio, no files)
   - `game.js`: game state, the main loop, HUD, hints, celebrations, settings panel
   - `tests/`: Node logic tests (not loaded by the game): `run-all.js` runs
     them all; `load-game.js` loads the logic files; layout, save, collision
@@ -231,10 +242,11 @@ Don't start the next part until the current one works and is committed.
 - [x] **Part 10 — Pacing to ~10 h:** prices refitted so a fast bot needs
       about 9.7 hours (test allows 8–12 h), never more than 10 minutes
       between purchases; helpers cost much more and walk slower.
-- [ ] **Part 11 — Offline earnings:** helpers keep serving while you're away; a
-      cozy "Welcome back, you earned X" popup (capped by a config value).
-- [ ] **Part 12 — Polish:** gentle animations, optional sound with a mute
-      toggle, more settings. (Number formatting and reset-with-confirmation
-      came early, in Part 7.)
+- [-] **Part 11 — Offline earnings:** skipped on purpose. The game is meant
+      to run while you zone away, not to earn while it's closed.
+- [x] **Part 12 — Polish:** sound effects and calm generated music (with
+      switches and a mute button), keep-screen-on, a smoothly counting cash
+      display, order bubbles that pop up, gently swaying seated customers,
+      butterflies over the grass, a two-column settings panel.
 - [ ] **Part 13 — Phone install:** web app manifest (landscape orientation,
       fullscreen) and icon so it can be added to the home screen.
