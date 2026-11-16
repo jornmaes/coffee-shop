@@ -61,14 +61,25 @@ function updatePlayer(dt) {
   p.walkTime += dt;
 }
 
+// Seconds since the last automatic save
+var timeSinceSave = 0;
+
 // Advance the game by dt seconds.
 function update(dt) {
   state.time += dt;
   updateInput();
   updatePlayer(dt);
-  tryBuyPads(state);
   updateMachines(state, dt);
-  tryCollect(state);
+
+  // save straight away after the important moments
+  var bought = tryBuyPads(state);
+  var collected = tryCollect(state);
+  timeSinceSave += dt;
+  if (bought || collected > 0 || timeSinceSave >= CONFIG.save.intervalSeconds) {
+    saveGame(state);
+    timeSinceSave = 0;
+  }
+
   updateFloaters(state);
   followCamera(state.player, dt);
 }
@@ -94,6 +105,15 @@ function loop(now) {
 // ----- Start the game -----
 window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', onResize);
-rebuildSolids(state); // make already-bought items solid (matters once saving exists)
+
+// Save when the player leaves: switching apps, locking the phone, closing the tab.
+// (Phones often kill a page in the background without warning, so this matters.)
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') saveGame(state);
+});
+window.addEventListener('pagehide', function () { saveGame(state); });
+
+rebuildSolids(state); // walls only, for a new game
+loadGame(state);      // bring back saved progress, if any (also rebuilds solids)
 onResize();
 requestAnimationFrame(loop);

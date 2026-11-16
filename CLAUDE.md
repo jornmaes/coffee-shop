@@ -93,6 +93,8 @@ After **each part** of the roadmap:
    - Switch to portrait (390×844) and check the rotate overlay appears.
    - Check the browser console for errors.
    - Try the new feature, reload the page, and confirm progress was saved.
+     To start over while testing, run `localStorage.removeItem('coffeeShopSave')`
+     in the browser console and reload.
 2. **Git commit** with a clear message describing the part (e.g.
    `Part 3: buy pads`), and tick the part off in the roadmap below.
 
@@ -108,7 +110,7 @@ Don't start the next part until the current one works and is committed.
       cash shown in the HUD.
 - [x] **Part 4 — Earning:** machines brew coins into the register; walk over
       the register to collect.
-- [ ] **Part 5 — Saving:** localStorage with versioning and safe defaults.
+- [x] **Part 5 — Saving:** localStorage with versioning and safe defaults.
 - [ ] **Part 6 — Build order:** the full chain of pads
       (counter → machines → seating → decor), each revealing the next.
 - [ ] **Part 7 — Expansion:** new areas open up (patio, upstairs, bakery corner).

@@ -92,6 +92,12 @@ var CONFIG = {
     cap: 1000,      // most coins the register can hold; machines pause when it's full
   },
 
+  // --- Saving ---
+  save: {
+    intervalSeconds: 5,  // how often progress is saved automatically (it also
+                         // saves right after buying/collecting and when the app is closed)
+  },
+
   // --- Effects ---
   effects: {
     buildPopTime: 0.35,  // seconds a new item takes to "pop" into place
