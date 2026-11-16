@@ -77,23 +77,116 @@ function fillWorldRect(wx, wy, ww, wh, color) {
   ctx.fillRect(s.x, s.y, ww * camera.scale + 0.5, wh * camera.scale + 0.5);
 }
 
-// Draw a checkerboard of tiles over an area (used for grass and floor).
+// Draw a checkerboard of tiles over an area, but only the tiles that are
+// on screen (the world is big; drawing all of it every frame is wasteful).
 function drawCheckerboard(x, y, width, height, colorA, colorB) {
-  for (var ty = 0; ty < height; ty++) {
-    for (var tx = 0; tx < width; tx++) {
-      var color = (tx + ty) % 2 === 0 ? colorA : colorB;
-      fillWorldRect(x + tx, y + ty, 1, 1, color);
+  var halfW = window.innerWidth / 2 / camera.scale + 1;
+  var halfH = window.innerHeight / 2 / camera.scale + 1;
+  var tx0 = Math.max(0, Math.floor(camera.x - halfW - x)), tx1 = Math.min(width, Math.ceil(camera.x + halfW - x));
+  var ty0 = Math.max(0, Math.floor(camera.y - halfH - y)), ty1 = Math.min(height, Math.ceil(camera.y + halfH - y));
+  for (var ty = ty0; ty < ty1; ty++) {
+    for (var tx = tx0; tx < tx1; tx++) {
+      fillWorldRect(x + tx, y + ty, 1, 1, (tx + ty) % 2 === 0 ? colorA : colorB);
     }
   }
 }
 
-// Draw the shop walls. (wallRects, not solidRects: solidRects also
-// holds bought items, which would show up as brown squares.)
-function drawWalls() {
-  for (var i = 0; i < wallRects.length; i++) {
-    var r = wallRects[i];
-    fillWorldRect(r.x, r.y, r.w, r.h, CONFIG.colors.wall);
+// Wooden planks (the lounge floor): long boards with staggered joints.
+function drawPlanks(area) {
+  fillWorldRect(area.x, area.y, area.w, area.h, area.floor[0]);
+  ctx.strokeStyle = area.floor[1];
+  ctx.lineWidth = Math.max(1, camera.scale * 0.05);
+  ctx.beginPath();
+  for (var row = 0; row < area.h * 2; row++) {
+    var y = area.y + row * 0.5;
+    var a = worldToScreen(area.x, y), b = worldToScreen(area.x + area.w, y);
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    // board joints, shifted every other row
+    for (var jx = (row % 2) * 1.5 + 1; jx < area.w; jx += 3) {
+      var j = worldToScreen(area.x + jx, y);
+      ctx.moveTo(j.x, j.y); ctx.lineTo(j.x, j.y + camera.scale * 0.5);
+    }
   }
+  ctx.stroke();
+}
+
+// How far a newly opened area has faded in: 0 = just opened, 1 = done.
+function areaReveal(state, area) {
+  if (area.opensWith === null) return 1;
+  var at = state.builtAt[area.opensWith];
+  if (at === undefined) return 1; // opened in an earlier session
+  return Math.min(1, (state.time - at) / CONFIG.effects.areaRevealTime);
+}
+
+// The floor of every open area, and an outline + sign for locked areas.
+function drawAreas(state) {
+  CONFIG.areas.forEach(function (area) {
+    if (!isAreaOpen(state, area)) { drawLockedArea(state, area); return; }
+    ctx.save();
+    ctx.globalAlpha = areaReveal(state, area);
+    if (area.floorStyle === 'planks') drawPlanks(area);
+    else drawCheckerboard(area.x, area.y, area.w, area.h, area.floor[0], area.floor[1]);
+    ctx.restore();
+  });
+}
+
+// A locked area: dashed outline on the grass and a little wooden sign.
+function drawLockedArea(state, area) {
+  var k = camera.scale;
+  var s = worldToScreen(area.x, area.y);
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 246, 232, 0.12)';
+  ctx.fillRect(s.x, s.y, area.w * k, area.h * k);
+  ctx.strokeStyle = CONFIG.colors.buildArea;
+  ctx.lineWidth = Math.max(2, k * 0.08);
+  ctx.setLineDash([k * 0.4, k * 0.25]);
+  ctx.strokeRect(s.x, s.y, area.w * k, area.h * k);
+  ctx.setLineDash([]);
+
+  // the sign
+  var pad = getPad(area.opensWith);
+  var line2 = isPadVisible(state, pad) ? 'Opens for ☕ ' + formatNumber(pad.price) : 'Coming soon';
+  var c = worldToScreen(area.x + area.w / 2, area.y + area.h / 2);
+  setFont(0.6, 800);
+  var w = Math.max(ctx.measureText('🔒 ' + area.name).width, k * 4) + k * 0.9;
+  var h = k * 1.6;
+  fillRoundRect(c.x - k * 0.08, c.y, k * 0.16, k * 1.5, k * 0.05, CONFIG.colors.woodDark); // post
+  fillRoundRect(c.x - w / 2, c.y - h / 2, w, h, k * 0.25, CONFIG.colors.woodDark);
+  fillRoundRect(c.x - w / 2 + k * 0.08, c.y - h / 2 + k * 0.08, w - k * 0.16, h - k * 0.16, k * 0.2, CONFIG.colors.woodLight);
+  ctx.fillStyle = CONFIG.colors.padText;
+  ctx.fillText('🔒 ' + area.name, c.x, c.y - k * 0.28);
+  setFont(0.42, 600);
+  ctx.fillText(line2, c.x, c.y + k * 0.34);
+  ctx.restore();
+}
+
+// The stone path from the front door to the edge of the world.
+function drawPath() {
+  var cafe = CONFIG.areas[0];
+  var door = cafe.openings[0];
+  var top = cafe.y + cafe.h;
+  fillWorldRect(door.x + 0.2, top, door.w - 0.4, CONFIG.world.height - top, CONFIG.colors.path);
+}
+
+// Draw the walls. Indoors: solid brown walls. Outdoors: a wooden fence.
+function drawWalls() {
+  var col = CONFIG.colors;
+  wallRects.forEach(function (r) {
+    if (r.style !== 'fence') { fillWorldRect(r.x, r.y, r.w, r.h, col.wall); return; }
+    // fence: a rail with posts every tile
+    var horizontal = r.w >= r.h;
+    var k = camera.scale;
+    var s = worldToScreen(r.x, r.y);
+    var w = r.w * k, h = r.h * k;
+    if (horizontal) fillRoundRect(s.x, s.y + h * 0.3, w, h * 0.4, h * 0.2, col.fence);
+    else fillRoundRect(s.x + w * 0.3, s.y, w * 0.4, h, w * 0.2, col.fence);
+    var len = horizontal ? r.w : r.h;
+    for (var i = 0; i <= len; i += 1) {
+      var px = horizontal ? s.x + Math.min(i, len) * k : s.x + w / 2;
+      var py = horizontal ? s.y + h / 2 : s.y + Math.min(i, len) * k;
+      fillRoundRect(px - k * 0.16, py - k * 0.16, k * 0.32, k * 0.32, k * 0.08, col.fenceDark);
+    }
+  });
 }
 
 // Set the canvas font, sized in tiles so text scales with the zoom.
@@ -103,58 +196,80 @@ function setFont(sizeInTiles, weight) {
   ctx.textBaseline = 'middle';
 }
 
-// Draw every pad that is currently on the floor.
+// Draw every pad that is currently on the floor (their name labels are
+// drawn later, on top of everything: see drawPadLabels).
 // Affordable pads glow and pulse; pads you can't afford yet are muted.
+// Expansion pads are bigger and golden, with sparkles.
 function drawPads(state) {
   var col = CONFIG.colors;
-  var pads = getVisiblePads(state);
-
-  for (var i = 0; i < pads.length; i++) {
-    var pad = pads[i];
+  getVisiblePads(state).forEach(function (pad) {
     var r = pad.pad;
     var affordable = state.cash >= pad.price;
+    var golden = pad.builds.type === 'expansion';
+    var glowColor = golden ? col.padGold : col.pad;
     var s = worldToScreen(r.x, r.y);
-    var w = r.w * camera.scale;
-    var h = r.h * camera.scale;
+    var k = camera.scale;
+    var w = r.w * k, h = r.h * k;
 
     ctx.save();
-
     // soft pulsing glow around affordable pads
-    if (affordable) {
+    if (affordable || golden) {
       var pulse = 0.5 + 0.5 * Math.sin(state.time * 4);
-      ctx.shadowColor = col.pad;
-      ctx.shadowBlur = camera.scale * (0.3 + 0.4 * pulse);
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = k * (golden ? 0.5 + 0.6 * pulse : 0.3 + 0.4 * pulse);
     }
-
-    // the pad itself
-    ctx.fillStyle = affordable ? col.pad : col.padTooPricey;
-    roundRectPath(s.x, s.y, w, h, camera.scale * 0.25);
+    ctx.fillStyle = affordable ? glowColor : (golden ? '#e6d3a8' : col.padTooPricey);
+    roundRectPath(s.x, s.y, w, h, k * 0.25);
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.lineWidth = Math.max(2, camera.scale * 0.07);
+    ctx.strokeStyle = golden ? '#fff3c4' : 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = Math.max(2, k * (golden ? 0.1 : 0.07));
     ctx.stroke();
+
+    // sparkles twinkling around golden pads
+    if (golden) {
+      for (var i = 0; i < 4; i++) {
+        var t = (state.time * 0.7 + i * 0.25) % 1;
+        var sx = s.x + w * ((i * 0.37 + 0.1) % 1), sy = s.y + h * (i % 2 ? 0.15 : 0.85) - t * k * 0.6;
+        ctx.globalAlpha = Math.sin(t * Math.PI);
+        drawSparkle(sx, sy, k * 0.14, '#fff3c4');
+      }
+      ctx.globalAlpha = 1;
+    }
 
     // price on the pad
     ctx.fillStyle = col.padText;
-    setFont(0.55, 700);
-    ctx.fillText(pad.price === 0 ? 'FREE' : '☕ ' + pad.price, s.x + w / 2, s.y + h / 2);
+    setFont(golden ? 0.62 : 0.55, 800);
+    ctx.fillText(pad.price === 0 ? 'FREE' : '☕ ' + formatNumber(pad.price), s.x + w / 2, s.y + h / 2);
+    ctx.restore();
+  });
+}
 
-    // name in a little label above the pad, plus the cozy bonus for decorations
-    var label = pad.name + (pad.builds.cozy ? '  ♥+' + pad.builds.cozy + '%' : '');
-    setFont(0.45, 600);
-    var labelW = ctx.measureText(label).width + camera.scale * 0.5;
-    var labelH = camera.scale * 0.65;
-    var lx = s.x + w / 2 - labelW / 2;
-    var ly = s.y - labelH - camera.scale * 0.15;
-    ctx.fillStyle = 'rgba(255, 246, 232, 0.92)';
+// The name labels above pads. Drawn after furniture and characters, so
+// nothing can ever cover them.
+function drawPadLabels(state) {
+  var k = camera.scale;
+  getVisiblePads(state).forEach(function (pad) {
+    var r = pad.pad;
+    var s = worldToScreen(r.x + r.w / 2, r.y);
+    var golden = pad.builds.type === 'expansion';
+    var label = (golden ? '✨ ' : '') + pad.name + (pad.builds.cozy ? '  ♥+' + pad.builds.cozy + '%' : '');
+    ctx.save();
+    setFont(0.45, golden ? 800 : 600);
+    var labelW = ctx.measureText(label).width + k * 0.5;
+    var labelH = k * 0.65;
+    var lx = s.x - labelW / 2;
+    var ly = s.y - labelH - k * 0.15;
+    ctx.fillStyle = golden ? 'rgba(255, 238, 190, 0.96)' : 'rgba(255, 246, 232, 0.92)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = k * 0.15;
     roundRectPath(lx, ly, labelW, labelH, labelH / 2);
     ctx.fill();
-    ctx.fillStyle = col.padText;
-    ctx.fillText(label, s.x + w / 2, ly + labelH / 2);
-
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = CONFIG.colors.padText;
+    ctx.fillText(label, s.x, ly + labelH / 2);
     ctx.restore();
-  }
+  });
 }
 
 // How "popped in" a freshly built item is: 0 = just bought, 1 = done.
@@ -172,13 +287,15 @@ function popScale(state, padId) {
 }
 
 // Item types that get a soft square shadow underneath.
-var SHADOWED_TYPES = { counter: true, machine: true, bookshelf: true, chalkboard: true };
+var SHADOWED_TYPES = { counter: true, machine: true, bookshelf: true, chalkboard: true, breadshelf: true,
+                       display: true, fireplace: true, piano: true, records: true, sacks: true, flowerbed: true };
 
 // Draw bought items. onlyFloor = true draws just the flat floor items
 // (rugs), false draws everything else.
 function drawBuiltItems(state, onlyFloor) {
   getBoughtPads(state).forEach(function (pad) {
     var b = pad.builds;
+    if (b.type === 'expansion') return; // opens an area; nothing to draw
     if (!!b.floor !== onlyFloor) return;
 
     var scale = popScale(state, pad.id);
@@ -188,6 +305,9 @@ function drawBuiltItems(state, onlyFloor) {
     // grow from the item's center
     var center = worldToScreen(b.x + b.w / 2, b.y + b.h / 2);
     var x = center.x - w / 2, y = center.y - h / 2;
+    // skip items that are completely off screen (with a margin for glows)
+    var m = camera.scale * 3;
+    if (x > window.innerWidth + m || y > window.innerHeight + m || x + w < -m || y + h < -m) return;
 
     ctx.save();
     if (SHADOWED_TYPES[b.type]) {
@@ -215,16 +335,27 @@ function drawCharacters(state) {
         { shirt: col.playerApron, skin: col.playerBody, hair: col.playerHair, hairStyle: 'short' },
         { faceX: ch.faceX, faceY: ch.faceY, bob: bob, apron: true });
     } else {
-      drawCharacter(s.x, s.y, r, ch.look, { faceX: ch.faceX, faceY: ch.faceY, bob: bob });
-      // sipping: a little cup in front of them
+      drawCharacter(s.x, s.y, r, ch.look, { faceX: ch.faceX, faceY: ch.faceY, bob: bob, vip: ch.vip, time: state.time });
+      // enjoying their order: the items in front of them
       if (ch.step === 'drinking') {
-        drawDrink(ch.order, s.x + ch.faceX * r * 0.7, s.y - r * 0.1, camera.scale * 0.42);
+        var n = ch.ordered.length;
+        ch.ordered.forEach(function (item, i) {
+          var ix, iy;
+          if (Math.abs(ch.faceX) > 0.5) {
+            // sitting beside the table: items in front, one behind the other
+            ix = s.x + ch.faceX * r * (0.75 + i * 0.55); iy = s.y - r * 0.1;
+          } else {
+            // sitting above/below the table: items side by side in front
+            ix = s.x + (i - (n - 1) / 2) * r * 0.75; iy = s.y + ch.faceY * r * 0.6;
+          }
+          drawMenuItem(item, ix, iy, camera.scale * 0.42);
+        });
       }
     }
   });
 }
 
-// Speech bubbles over customers, and the drinks the barista is holding.
+// Speech bubbles over customers, and what the barista is holding.
 // Drawn after all characters so nothing covers them.
 function drawBubblesAndCarried(state) {
   var k = camera.scale;
@@ -233,31 +364,34 @@ function drawBubblesAndCarried(state) {
     var top = s.y - c.radius * k * 1.4;
     if (c.step === 'ordering') {
       // thinking "..." with dots that light up one by one
-      drawBubble(s.x, top, k, false, function (cx, cy, size) {
+      drawBubble(s.x, top, k, 1, false, function (cx, cy, size) {
         var lit = Math.floor(state.time * 3) % 3;
         for (var i = 0; i < 3; i++) {
           fillCircle(cx + (i - 1) * size * 0.28, cy, size * 0.09, i === lit ? '#3b2a20' : '#c9b9a3');
         }
       });
-    } else if (c.order && !c.served) {
-      // the drink they want; glows green if the barista is holding it
-      var hasIt = state.carrying.indexOf(c.order) !== -1;
+    } else if (c.orders.length > 0) {
+      // what they still want; glows green if the barista is holding any of it
+      var hasIt = c.orders.some(function (o) { return state.carrying.indexOf(o) !== -1; });
       var bounce = c.step === 'waiting' ? Math.abs(Math.sin(state.time * 3 + c.id)) * k * 0.08 : 0;
-      drawBubble(s.x, top - bounce, k, hasIt, function (cx, cy, size) {
-        drawDrink(c.order, cx, cy, size * 0.95);
+      var n = c.orders.length;
+      drawBubble(s.x, top - bounce, k, n, hasIt, function (cx, cy, size) {
+        c.orders.forEach(function (item, i) {
+          drawMenuItem(item, cx + (i - (n - 1) / 2) * size * 1.05, cy, size * 0.95);
+        });
       });
     }
   });
 
-  // the barista's drinks, floating in a row above their head
+  // the barista's items, floating in a row above their head
   var p = state.player;
   var ps = worldToScreen(p.x, p.y);
   var n = state.carrying.length;
-  state.carrying.forEach(function (drink, i) {
+  state.carrying.forEach(function (item, i) {
     var dx = (i - (n - 1) / 2) * k * 0.6;
     var dy = ps.y - p.radius * k * 2.1 + Math.sin(state.time * 5 + i) * k * 0.04;
     fillCircle(ps.x + dx, dy, k * 0.3, 'rgba(255, 250, 242, 0.85)');
-    drawDrink(drink, ps.x + dx, dy, k * 0.5);
+    drawMenuItem(item, ps.x + dx, dy, k * 0.5);
   });
 }
 
@@ -289,6 +423,25 @@ function drawCoins(state) {
     fillCircle(pos.x, pos.y, r, CONFIG.colors.coinDark);
     fillCircle(pos.x, pos.y, r * 0.78, CONFIG.colors.coin);
     fillCircle(pos.x - r * 0.25, pos.y - r * 0.25, r * 0.22, '#fff3c4'); // shine
+  });
+}
+
+// Confetti pieces from opening a new area: little spinning paper squares.
+function drawConfetti(state) {
+  var life = CONFIG.effects.confettiTime;
+  var k = camera.scale;
+  state.confetti.forEach(function (p) {
+    var age = state.time - p.born;
+    if (age < 0) return;
+    var s = worldToScreen(p.x, p.y);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - age / life);
+    ctx.translate(s.x, s.y);
+    ctx.rotate(p.spin * age);
+    ctx.fillStyle = p.color;
+    // squash it as it flips, so it looks like it's tumbling
+    ctx.fillRect(-k * 0.1, -k * 0.06 * Math.abs(Math.cos(age * 8 + p.spin)), k * 0.2, k * 0.12);
+    ctx.restore();
   });
 }
 
@@ -334,9 +487,9 @@ function drawJoystick() {
   ctx.restore();
 }
 
-// Draw a dashed outline showing where things will be built later.
+// Draw a dashed outline showing where the café will be built.
 function drawBuildArea() {
-  var p = CONFIG.plot;
+  var p = CONFIG.areas[0];
   var margin = 1.5; // tiles of space between the walls and the outline
   var s = worldToScreen(p.x + margin, p.y + margin);
 
@@ -344,12 +497,10 @@ function drawBuildArea() {
   ctx.strokeStyle = CONFIG.colors.buildArea;
   ctx.lineWidth = Math.max(2, camera.scale * 0.08);
   ctx.setLineDash([camera.scale * 0.4, camera.scale * 0.25]);
-  ctx.strokeRect(s.x, s.y,
-    (p.width - margin * 2) * camera.scale,
-    (p.height - margin * 2) * camera.scale);
+  ctx.strokeRect(s.x, s.y, (p.w - margin * 2) * camera.scale, (p.h - margin * 2) * camera.scale);
 
   // a friendly label near the top (the middle is where the first pad sits)
-  var mid = worldToScreen(p.x + p.width / 2, p.y + margin + 1.2);
+  var mid = worldToScreen(p.x + p.w / 2, p.y + margin + 1.2);
   ctx.fillStyle = CONFIG.colors.buildArea;
   setFont(0.6, 600);
   ctx.fillText('Your café starts here', mid.x, mid.y);
@@ -359,7 +510,6 @@ function drawBuildArea() {
 // Draw the whole world for one frame, back to front.
 function drawWorld(state) {
   var w = CONFIG.world;
-  var p = CONFIG.plot;
   var col = CONFIG.colors;
 
   // clear to the grass color (covers areas outside the world, too)
@@ -367,7 +517,8 @@ function drawWorld(state) {
   ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
   drawCheckerboard(0, 0, w.width, w.height, col.grass, col.grassDark);
-  drawCheckerboard(p.x, p.y, p.width, p.height, col.floor, col.floorDark);
+  drawPath();
+  drawAreas(state);
   drawWalls();
   // show the "starts here" hint only while the shop is still empty
   if (Object.keys(state.bought).length === 0) drawBuildArea();
@@ -375,8 +526,10 @@ function drawWorld(state) {
   drawPads(state);
   drawBuiltItems(state, false); // furniture, machines, decorations
   drawCharacters(state);
+  drawPadLabels(state);         // on top, so furniture never hides them
   drawBubblesAndCarried(state);
   drawFloaters(state);
+  drawConfetti(state);
   drawCoins(state);
   drawJoystick(); // last, so it sits on top of everything
 }

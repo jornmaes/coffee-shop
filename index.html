@@ -18,10 +18,33 @@
       <div id="cash">☕ 0</div>
       <div id="cozy"></div>
     </div>
-    <!-- Settings does nothing yet; it gets a menu in a later part -->
     <button id="settings-btn" aria-label="Settings">⚙</button>
     <!-- "What to do next" tip for new players -->
     <div id="hint"></div>
+    <!-- Big celebration banner ("Bakery Corner is open!") -->
+    <div id="banner">
+      <div id="banner-title"></div>
+      <div id="banner-text"></div>
+    </div>
+  </div>
+
+  <!-- Settings panel (opened with the ⚙ button; the game pauses) -->
+  <div id="settings" hidden>
+    <div class="panel">
+      <h2>Your café</h2>
+      <ul id="stats"></ul>
+      <div id="reset-ask">
+        <button id="reset-btn" class="btn btn-soft">Reset progress</button>
+      </div>
+      <div id="reset-confirm" hidden>
+        <p>Start over with an empty café? Everything you built and earned will be gone. This can't be undone.</p>
+        <div class="row">
+          <button id="reset-no" class="btn">Keep playing</button>
+          <button id="reset-yes" class="btn btn-danger">Yes, start over</button>
+        </div>
+      </div>
+      <button id="settings-close" class="btn btn-main">Back to the café</button>
+    </div>
   </div>
 
   <!-- Shown instead of the game when the phone is held upright -->

@@ -12,7 +12,9 @@ var SAVE_KEY = 'coffeeShopSave';
 // loadGame() fills in anything missing, so adding new fields doesn't need a bump.
 //   1: Part 5 (coins collected from a register)
 //   2: Part 6 (customers pay directly; machines make drinks)
-var SAVE_VERSION = 2;
+//   3: Part 7 (bigger map with new areas: the café moved, so old player
+//      positions are dropped and the barista starts at the door)
+var SAVE_VERSION = 3;
 
 // Turn the game state into a plain object with only what needs saving.
 // Customers, animations and floating texts are not saved: a reloaded
@@ -82,8 +84,8 @@ function loadGame(state) {
   if (data.machines && typeof data.machines === 'object') {
     CONFIG.pads.forEach(function (pad) {
       var m = data.machines[pad.id];
-      if (pad.builds.type !== 'machine' || !state.bought[pad.id] || !m || typeof m !== 'object') return;
-      var brewTime = CONFIG.drinks[pad.builds.drink].brewSeconds;
+      if (!pad.builds.makes || !state.bought[pad.id] || !m || typeof m !== 'object') return;
+      var brewTime = CONFIG.menu[pad.builds.makes].brewSeconds;
       state.machines[pad.id] = {
         ready: isGoodNumber(m.ready) ? Math.max(0, Math.min(CONFIG.machine.holds, Math.floor(m.ready))) : 0,
         timer: isGoodNumber(m.timer) ? Math.max(0, Math.min(brewTime, m.timer)) : 0,
@@ -91,10 +93,10 @@ function loadGame(state) {
     });
   }
 
-  // drinks in the barista's hands (only real drinks, never more than they can carry)
+  // items in the barista's hands (only real menu items, never more than they can carry)
   if (Array.isArray(data.carrying)) {
     state.carrying = data.carrying.filter(function (d) {
-      return typeof d === 'string' && CONFIG.drinks.hasOwnProperty(d);
+      return typeof d === 'string' && CONFIG.menu.hasOwnProperty(d);
     }).slice(0, CONFIG.player.carry);
   }
 
@@ -107,8 +109,10 @@ function loadGame(state) {
   rebuildSolids(state);
 
   // player position: only use it if it's a valid spot (inside the world
-  // and not inside a wall or item, which can happen if the layout changed)
-  if (data.player && isGoodNumber(data.player.x) && isGoodNumber(data.player.y)) {
+  // and not inside a wall or item, which can happen if the layout changed).
+  // Saves from before version 3 used the old, smaller map, so we skip them.
+  var sameMap = isGoodNumber(data.saveVersion) && data.saveVersion >= 3;
+  if (sameMap && data.player && isGoodNumber(data.player.x) && isGoodNumber(data.player.y)) {
     var p = state.player;
     var x = data.player.x, y = data.player.y;
     var insideWorld = x >= p.radius && y >= p.radius &&
@@ -122,7 +126,7 @@ function loadGame(state) {
   return data;
 }
 
-// Delete the save (used by the reset button in a later part).
+// Delete the save (used by the reset button in the settings).
 function deleteSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* nothing to do */ }
 }

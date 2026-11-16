@@ -1,16 +1,18 @@
 // =============================================================
 // customers.js — customers coming in, ordering, sitting, being
-// served, paying and leaving. Plus the coin and heart effects.
+// served, paying and leaving. Plus the coin effect.
 //
 // A customer's visit, step by step (c.step):
 //   'toQueue'  walking from the door to their place in line
 //   'queue'    standing in line
 //   'ordering' at the front of the line, thinking (shows "...")
-//   'toSeat'   order placed (shows the drink), walking to their seat
-//   'waiting'  sitting, waiting for their drink
-//   'drinking' served! sipping happily
+//   'toSeat'   order placed (shows what they want), walking to their seat
+//   'waiting'  sitting, waiting for their order
+//   'drinking' everything served! enjoying it
 //   'leaving'  walking back out the door, then they disappear
-// Customers never get angry or leave without their drink: no fail states.
+// An order is one or two items (a drink and a treat). Each item is paid
+// for when it's handed over.
+// Customers never get angry or leave without their order: no fail states.
 // =============================================================
 
 // Pick a random number between min and max.
@@ -36,17 +38,31 @@ function getQueue(state) {
   });
 }
 
-// Pick a drink to order, using each drink's popularity as its chance.
-function pickDrink(state) {
-  var drinks = getAvailableDrinks(state);
+// Pick one item from a list, using each item's popularity as its chance.
+function pickByPopularity(items) {
   var total = 0;
-  drinks.forEach(function (id) { total += CONFIG.drinks[id].popularity; });
+  items.forEach(function (id) { total += CONFIG.menu[id].popularity; });
   var roll = Math.random() * total;
-  for (var i = 0; i < drinks.length; i++) {
-    roll -= CONFIG.drinks[drinks[i]].popularity;
-    if (roll < 0) return drinks[i];
+  for (var i = 0; i < items.length; i++) {
+    roll -= CONFIG.menu[items[i]].popularity;
+    if (roll < 0) return items[i];
   }
-  return drinks[drinks.length - 1];
+  return items[items.length - 1];
+}
+
+// Decide what a customer orders: one item, and sometimes a second one of
+// the other kind (a treat with their drink, or a drink with their treat).
+function pickOrder(state) {
+  var menu = getAvailableMenu(state);
+  var first = pickByPopularity(menu);
+  var order = [first];
+  var otherKind = menu.filter(function (id) { return CONFIG.menu[id].kind !== CONFIG.menu[first].kind; });
+  if (otherKind.length > 0 && Math.random() < CONFIG.customers.comboChance) {
+    order.push(pickByPopularity(otherKind));
+  }
+  // drinks first, so the bubble always reads "drink + treat"
+  order.sort(function (a, b) { return CONFIG.menu[a].kind === 'drink' ? -1 : CONFIG.menu[b].kind === 'drink' ? 1 : 0; });
+  return order;
 }
 
 // Send a customer walking toward a target point.
@@ -64,12 +80,19 @@ function repathCustomers(state) {
   });
 }
 
-// Can a new customer come in right now? Only when there's a drink to sell,
+// Can a new customer come in right now? Only when there's something to sell,
 // a free seat to claim, and room in the line.
 function canSpawnCustomer(state) {
-  return getAvailableDrinks(state).length > 0 &&
+  return getAvailableMenu(state).length > 0 &&
          getFreeSeats(state).length > 0 &&
          getQueue(state).length < CONFIG.customers.maxQueue;
+}
+
+// Seconds until the next customer may come in. More seats = busier café.
+function nextSpawnDelay(state) {
+  var cc = CONFIG.customers;
+  var faster = 1 + getSeats(state).length * cc.spawnFasterPerSeat;
+  return randomBetween(cc.spawnSecondsMin, cc.spawnSecondsMax) / faster;
 }
 
 // Make a new customer at the door, with a random look and a claimed seat.
@@ -83,8 +106,10 @@ function spawnCustomer(state) {
     step: 'toQueue',
     queueIndex: getQueue(state).length, // go to the back of the line
     seatKey: seat.key,
-    order: null,          // drink id once they've ordered
-    served: false,        // true once they got their drink
+    vip: Math.random() < cc.vipChance, // ★ special guest who pays extra
+    ordered: [],          // everything they ordered (for drawing what they enjoy)
+    orders: [],           // items still to be handed over
+    served: false,        // true once they got everything
     timer: 0,             // used for ordering / drinking time
     path: [], target: null,
     faceX: 0, faceY: -1, moving: false, walkTime: 0,
@@ -159,7 +184,8 @@ function updateCustomer(state, c, dt) {
   } else if (c.step === 'ordering') {
     c.timer -= dt;
     if (c.timer <= 0) {
-      c.order = pickDrink(state);
+      c.ordered = pickOrder(state);
+      c.orders = c.ordered.slice();
       c.step = 'toSeat';
       c.queueIndex = -1;
       var seat = getSeatOf(state, c);
@@ -170,7 +196,7 @@ function updateCustomer(state, c, dt) {
   } else if (c.step === 'toSeat') {
     if (followPath(c, dt)) {
       var s = getSeatOf(state, c);
-      c.faceX = s.faceX; c.faceY = 0;
+      c.faceX = s.faceX; c.faceY = s.faceY;
       if (c.served) startDrinking(c);
       else c.step = 'waiting';
     }
@@ -190,7 +216,7 @@ function updateCustomer(state, c, dt) {
   }
 }
 
-// Start sipping the drink.
+// Start enjoying the order.
 function startDrinking(c) {
   c.step = 'drinking';
   c.timer = randomBetween(CONFIG.customers.drinkSecondsMin, CONFIG.customers.drinkSecondsMax);
@@ -202,38 +228,46 @@ function updateCustomers(state, dt) {
   state.spawnTimer -= dt;
   if (state.spawnTimer <= 0 && canSpawnCustomer(state)) {
     spawnCustomer(state);
-    state.spawnTimer = randomBetween(CONFIG.customers.spawnSecondsMin, CONFIG.customers.spawnSecondsMax);
+    state.spawnTimer = nextSpawnDelay(state);
   }
 
   state.customers.forEach(function (c) { updateCustomer(state, c, dt); });
   state.customers = state.customers.filter(function (c) { return !c.gone; });
 }
 
-// Hand over a drink when the barista walks up to a customer who ordered it.
-// Wrong drinks are simply not handed over: nothing bad happens.
-// Returns the customer who was served, or null.
+// Hand over an item when the barista walks up to a customer who ordered it.
+// Wrong items are simply not handed over: nothing bad happens.
+// Returns the customer who received something, or null.
 function tryDeliver(state) {
   var p = state.player;
   for (var i = 0; i < state.customers.length; i++) {
     var c = state.customers[i];
-    if (!c.order || c.served) continue;
+    if (c.orders.length === 0) continue;
     var dx = c.x - p.x, dy = c.y - p.y;
     var near = p.radius + c.radius + CONFIG.player.reach;
     if (dx * dx + dy * dy > near * near) continue;
-    var held = state.carrying.indexOf(c.order);
-    if (held === -1) continue; // the barista doesn't have their drink
 
-    state.carrying.splice(held, 1);
-    c.served = true;
-    if (c.step === 'waiting') startDrinking(c);
+    // find something in our hands that this customer still wants
+    var item = null;
+    for (var j = 0; j < c.orders.length; j++) {
+      if (state.carrying.indexOf(c.orders[j]) !== -1) { item = c.orders[j]; break; }
+    }
+    if (item === null) continue; // the barista doesn't have anything they want
+
+    state.carrying.splice(state.carrying.indexOf(item), 1);
+    c.orders.splice(c.orders.indexOf(item), 1);
+    if (c.orders.length === 0) {
+      c.served = true;
+      if (c.step === 'waiting') startDrinking(c);
+    }
 
     // pay up!
-    var amount = getDrinkPayment(state, c.order);
+    var amount = getItemPayment(state, item, c.vip);
     state.cash += amount;
-    state.stats.served += 1;
-    addFloater(state, '+' + amount, c.x, c.y - 1, CONFIG.colors.earn);
-    addFloater(state, '♥', c.x + 0.5, c.y - 0.6, CONFIG.colors.heart);
-    spawnCoinBurst(state, c.x, c.y - 0.4, amount);
+    if (c.served) state.stats.served += 1;
+    addFloater(state, (c.vip ? '★ +' : '+') + formatNumber(amount), c.x, c.y - 1, CONFIG.colors.earn);
+    if (c.served) addFloater(state, '♥', c.x + 0.5, c.y - 0.6, CONFIG.colors.heart);
+    spawnCoinBurst(state, c.x, c.y - 0.4, amount, c.vip);
     return c;
   }
   return null;
@@ -242,9 +276,10 @@ function tryDeliver(state) {
 // ---------- Coin effect ----------
 
 // Coins pop out of the customer, then fly to the cash counter in the corner.
-// More coins for bigger payments (up to CONFIG.effects.maxCoins).
-function spawnCoinBurst(state, x, y, amount) {
-  var count = Math.min(CONFIG.effects.maxCoins, 3 + Math.floor(amount / 6));
+// More coins for bigger payments (up to CONFIG.effects.maxCoins, doubled for VIPs).
+function spawnCoinBurst(state, x, y, amount, vip) {
+  var max = CONFIG.effects.maxCoins * (vip ? 2 : 1);
+  var count = Math.min(max, 3 + Math.floor(Math.log(amount + 1) * 1.5));
   for (var i = 0; i < count; i++) {
     var angle = -Math.PI / 2 + randomBetween(-1.1, 1.1); // mostly upward
     var speed = randomBetween(2.5, 4.5);

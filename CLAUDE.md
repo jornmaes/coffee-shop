@@ -17,19 +17,42 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   1. A customer only walks in if there is a **free seat** (they claim it on
      entry). If all seats are taken, nobody new comes in.
   2. They queue at the **counter** and **place an order** (a speech bubble shows
-     the drink), then walk to their seat and wait there.
-  3. Each **machine makes one specific drink** (Espresso, Cappuccino, Latte,
-     Mocha, Iced Coffee) and keeps a finished one ready on its tray.
-  4. The barista walks to the right machine to **pick up** the drink. The
-     barista only picks up drinks that someone ordered, so walking past
-     machines never fills your hands with unwanted drinks.
-  5. The barista walks to the customer to **hand over the right drink**. A wrong
-     drink is simply not handed over.
-  6. The customer **pays**, and **coins burst out of them** and fly to your
-     cash. They sip happily (little hearts), then leave and free the seat.
-- **What you buy:** machines unlock new, pricier drinks; tables add seats (more
-  customers at once); **decorations** (flowers, bookshelf, rug, fairy lights,
-  plant, lamp, sleepy cat, menu board...) add a **cozy bonus** (+% on every payment).
+     what they want), then walk to their seat and wait there. Once the shop
+     sells treats, some customers order a **combo**: a drink *and* a treat.
+  3. Each **machine makes one specific menu item** (coffee machines, bakery
+     ovens, a lemonade stand, a blender, pots) and keeps a finished one ready
+     on its tray.
+  4. The barista walks to the right machine to **pick up** the item. The
+     barista only picks up items that someone ordered, so walking past
+     machines never fills your hands with unwanted things.
+  5. The barista walks to the customer to **hand over the right item**. A wrong
+     item is simply not handed over.
+  6. The customer **pays for each item** as it's handed over, and **coins burst
+     out of them** and fly to your cash. Once they have everything they enjoy
+     it (little hearts), then leave and free the seat.
+- **VIP customers** (a twinkling gold star) show up now and then and pay
+  several times the normal price: a happy surprise, never a requirement.
+- **What you buy:** machines unlock new, pricier menu items; tables add seats
+  (more customers at once); **decorations** add a **cozy bonus** (+% on every
+  payment).
+- **Areas:** the shop grows into new areas, each with its own look, menu,
+  furniture and decorations. A locked area shows as an outline with a sign
+  on the grass, so you always see what's coming. A big **golden pad** inside
+  the café opens it: the wall opens up, confetti flies, the camera visits the
+  new area and a banner announces it.
+  - **Café** (start): coffee drinks, tables for two, cozy decor.
+  - **Bakery Corner**: ovens bake croissants, cupcakes and cinnamon rolls
+    (treats, so combo orders start); big tables for four; bunting, bread
+    shelf, pastry display, flour sacks.
+  - **Sunny Patio** (outdoors, fenced): lemonade stand and frappé blender;
+    parasol tables; flower planter, fountain, lanterns.
+  - **Book Lounge**: hot chocolate and matcha; armchairs; fireplace, piano,
+    record player, big soft rug.
+- **Celebrations keep it exciting:** "new on the menu" and "area complete"
+  banners, confetti, golden pads with sparkles.
+- **Pacing:** the whole shop is a multi-hour project (a fast bot needs about
+  3.5 hours; the test allows 1.5–5 h). There's always a next pad within a few
+  minutes, with an area opening as the bigger goal.
 - **No fail states.** Nothing is ever lost: customers wait patiently forever and
   never leave angry, wrong drinks do nothing, money never goes negative.
   The worst case is "progress is slower".
@@ -38,6 +61,8 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   (later parts) reward coming back.
 - **Onboarding:** a small hint bar tells new players what to do next, until
   they've served a few customers.
+- **Settings (⚙):** pauses the game, shows a few stats, and has **Reset
+  progress** (asks for confirmation first).
 - Calm, cute tone: soft colors, rounded shapes, gentle animations, no pressure.
 
 ## Tech
@@ -60,12 +85,19 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   no extra buttons.
 - **Graphics:** everything is drawn with simple canvas shapes (no image files)
   in a cute, rounded style. Drawing code lives in `art.js`.
+- **The map is bigger than the screen** (areas side by side); the camera follows
+  the barista and only what's on screen is drawn. Walls are generated from
+  the areas in config; a door is cut into a wall when its area opens.
+- **Pad name labels are drawn on top of everything** (after furniture and
+  characters), so nothing can hide them.
 - **Customers walk with pathfinding** (`path.js`): a grid of half-tile cells,
   A* search, then the route is straightened. The grid is rebuilt whenever
   something is built, and walking customers re-plan their route.
 - **Save progress in `localStorage`.**
   - One save key (`coffeeShopSave`), stored as JSON: cash, bought pads, machine
-    trays and timers, drinks being carried, stats, player position, last-seen time.
+    trays and timers, items being carried, stats, player position, last-seen time.
+  - Save version 3 = the bigger map of Part 7. Older saves keep everything
+    except the player position (the café moved), so the barista starts at the door.
   - Customers are **not** saved; a reloaded café starts empty and fills up again.
   - Save on every purchase, pickup and delivery, every few seconds, and on
     `visibilitychange` / `pagehide`.
@@ -76,12 +108,14 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
 
 ## Balance numbers: `config.js`
 
-**ALL balance numbers live in `config.js`**: pad prices and build order, drink
-prices / brew times / popularity, customer speed and timings, seats, queue,
-cozy bonuses, carry limit, player speed, joystick size, starting cash, effects.
+**ALL balance numbers live in `config.js`**: pad prices and build order, menu
+prices / brew times / popularity, customer speed and timings, combo and VIP
+chances, seats, queue, cozy bonuses, carry limit, player speed, joystick
+size, starting cash, effects.
 
-- **Layout** (positions and sizes of pads, items, the order spot and queue)
-  also lives in config, so the shop can be rearranged without touching code.
+- **Layout** (areas with their walls and doors, positions and sizes of pads,
+  items, the order spot and queue) also lives in config, so the shop can be
+  rearranged without touching code.
 - Game code reads from a single global `CONFIG` object; it never hard-codes a
   balance number.
 - Each value has a short comment saying what it does and its unit
@@ -90,8 +124,10 @@ cozy bonuses, carry limit, player speed, joystick size, starting cash, effects.
   no clever computed values beyond simple formulas.
 - When changing the layout, keep these true (the layout test checks them):
   items don't overlap each other or pads; pads that can be visible at the same
-  time don't overlap; seats and queue spots are reachable from the door; the
-  barista can reach every machine, pad and seat.
+  time don't overlap, and neither do their name labels; every pad is in an
+  area that is open when the pad shows; seats and queue spots are reachable
+  from the door; the barista can reach every machine, pad and seat (also at
+  the moment each pad appears).
 
 ## Code style
 
@@ -103,14 +139,14 @@ cozy bonuses, carry limit, player speed, joystick size, starting cash, effects.
   - `index.html`: page structure, canvas, HUD, script order
   - `style.css`: all styling
   - `config.js`: all balance numbers and the layout
-  - `world.js`: walls, collision, buy pads, machines, drink pickup, seats, cozy bonus
+  - `world.js`: areas and walls, collision, buy pads, machines, pickup, seats, cozy bonus
   - `path.js`: the walking grid and route finding for customers
-  - `customers.js`: customer visits (queue, order, seat, pay, leave) and the coin effect
+  - `customers.js`: customer visits (queue, order, seat, pay, leave), combos, VIPs, coins
   - `save.js`: localStorage save/load
-  - `art.js`: how everything looks (drinks, machines, furniture, decor, characters)
+  - `art.js`: how everything looks (menu items, machines, furniture, decor, characters)
   - `render.js`: the camera and drawing each frame in the right order
   - `input.js`: joystick and keyboard
-  - `game.js`: game state, the main loop, HUD and hints
+  - `game.js`: game state, the main loop, HUD, hints, celebrations, settings panel
 - Use a `requestAnimationFrame` loop and compute everything from elapsed time
   (`dt`), not frame count, so it stays correct when the tab sleeps.
 
@@ -120,16 +156,17 @@ After **each part** of the roadmap:
 
 1. **Test** it:
    - Run `node --check <file>.js` on changed JS files to catch syntax errors.
-   - Run logic tests in Node when logic changed: load the game files into a
-     `vm` sandbox (no browser needed) and check the rules, layout and a bot
-     that plays the whole build order (no getting stuck, sensible pacing).
+   - Run logic tests in Node when logic changed: load the game's logic files
+     (no browser needed; join them into one function rather than a `vm`
+     sandbox, which is many times slower) and check the rules, layout and a
+     bot that plays the whole build order (no getting stuck, sensible pacing).
    - Open `index.html` in a browser in responsive mode, landscape (e.g. 844×390).
      Turn on touch emulation to try the joystick.
    - Switch to portrait (390×844) and check the rotate overlay appears.
    - Check the browser console for errors.
    - Try the new feature, reload the page, and confirm progress was saved.
-     To start over while testing, run `localStorage.removeItem('coffeeShopSave')`
-     in the browser console and reload.
+     To start over while testing, use ⚙ → Reset progress (or run
+     `localStorage.removeItem('coffeeShopSave')` in the console and reload).
 2. **Git commit** with a clear message describing the part (e.g.
    `Part 3: buy pads`), and tick the part off in the roadmap below.
 
@@ -147,15 +184,18 @@ Don't start the next part until the current one works and is committed.
       sit down; machines make specific drinks; the barista picks up and hands
       over the right drink; customers pay with a coin burst. Full build order:
       5 drink machines, 5 tables, 8 cozy decorations.
-- [ ] **Part 7 — Expansion:** new areas open up (patio, upstairs, bakery corner)
-      with more seats and a few new drinks or treats.
+- [x] **Part 7 — Expansion:** three new areas (Bakery Corner, Sunny Patio,
+      Book Lounge) opened by golden pads, each with its own machines, menu,
+      seats and decor; treats and combo orders; VIP customers; celebrations
+      (confetti, banners, camera visit); longer pacing; pad labels always on
+      top; settings panel with reset progress.
 - [ ] **Part 8 — Helpers & upgrades:** hire a helper barista who delivers drinks
       on their own (the idle part); upgrades like faster machines, bigger trays,
       carrying more drinks, walking faster.
 - [ ] **Part 9 — Offline earnings:** helpers keep serving while you're away; a
       cozy "Welcome back, you earned X" popup (capped by a config value).
 - [ ] **Part 10 — Polish:** gentle animations, optional sound with a mute
-      toggle, number formatting (1.2K, 3.4M), settings with a reset-save button
-      (with confirmation).
+      toggle, more settings. (Number formatting and reset-with-confirmation
+      came early, in Part 7.)
 - [ ] **Part 11 — Phone install:** web app manifest (landscape orientation,
       fullscreen) and icon so it can be added to the home screen.

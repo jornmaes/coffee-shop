@@ -1,37 +1,109 @@
 // =============================================================
-// world.js — walls, collision, buy pads, machines, seats and
-// the cozy bonus. (Customers live in customers.js.)
+// world.js — areas and walls, collision, buy pads, machines,
+// seats and the cozy bonus. (Customers live in customers.js.)
 // =============================================================
+
+// ---------- Small helpers ----------
+
+// Short, friendly numbers: 950, 1.2K, 12K, 3.4M.
+function formatNumber(n) {
+  n = Math.floor(n);
+  if (n < 1000) return String(n);
+  var units = [[1e6, 'M'], [1e3, 'K']];
+  for (var i = 0; i < units.length; i++) {
+    if (n >= units[i][0]) {
+      var v = n / units[i][0];
+      // one decimal for small values (1.2K), none for bigger ones (12K)
+      var text = v < 10 ? (Math.floor(v * 10) / 10).toString() : String(Math.floor(v));
+      return text + units[i][1];
+    }
+  }
+  return String(n);
+}
+
+// ---------- Areas ----------
+
+// Find an area's config by its id.
+function getArea(id) {
+  for (var i = 0; i < CONFIG.areas.length; i++) {
+    if (CONFIG.areas[i].id === id) return CONFIG.areas[i];
+  }
+  return null;
+}
+
+// Is this area open? (the café always is; the others once their pad is bought)
+function isAreaOpen(state, area) {
+  return area.opensWith === null || !!state.bought[area.opensWith];
+}
 
 // ---------- Walls and collision ----------
 
-// Build the list of wall rectangles from the plot settings.
-// Each wall is { x, y, w, h }. The bottom wall has a gap for the door.
-function getWallRects() {
-  var p = CONFIG.plot;
-  var t = p.wallThickness;
-  var doorLeft = p.x + (p.width - p.doorWidth) / 2;
-  var doorRight = doorLeft + p.doorWidth;
-
-  return [
-    { x: p.x - t,        y: p.y - t,        w: p.width + t * 2,               h: t },            // top
-    { x: p.x - t,        y: p.y,            w: t,                             h: p.height + t }, // left
-    { x: p.x + p.width,  y: p.y,            w: t,                             h: p.height + t }, // right
-    { x: p.x - t,        y: p.y + p.height, w: doorLeft - (p.x - t),          h: t },            // bottom-left
-    { x: doorRight,      y: p.y + p.height, w: p.x + p.width + t - doorRight, h: t },            // bottom-right
-  ];
+// The wall rectangles of one area, one per side listed in area.walls.
+// Corners overlap a little, which is fine.
+function getAreaWalls(area) {
+  var t = CONFIG.wallThickness;
+  var sides = {
+    top:    { x: area.x - t,      y: area.y - t,      w: area.w + t * 2, h: t },
+    bottom: { x: area.x - t,      y: area.y + area.h, w: area.w + t * 2, h: t },
+    left:   { x: area.x - t,      y: area.y - t,      w: t,              h: area.h + t * 2 },
+    right:  { x: area.x + area.w, y: area.y - t,      w: t,              h: area.h + t * 2 },
+  };
+  return area.walls.map(function (side) {
+    var r = sides[side];
+    return { x: r.x, y: r.y, w: r.w, h: r.h, style: area.wallStyle };
+  });
 }
 
-// Just the walls (never change). render.js draws these.
-var wallRects = getWallRects();
+// Cut a door-sized gap out of a wall. Returns the 0, 1 or 2 pieces left.
+// Walls are long and thin, so we only cut along their long side.
+function cutWall(wall, gap) {
+  var e = TOUCH_TOLERANCE;
+  var touches = gap.x < wall.x + wall.w - e && gap.x + gap.w > wall.x + e &&
+                gap.y < wall.y + wall.h - e && gap.y + gap.h > wall.y + e;
+  if (!touches) return [wall];
+  var pieces = [];
+  if (wall.w >= wall.h) {
+    // horizontal wall: keep the parts left and right of the gap
+    if (gap.x > wall.x) pieces.push({ x: wall.x, y: wall.y, w: gap.x - wall.x, h: wall.h, style: wall.style });
+    var right = gap.x + gap.w;
+    if (right < wall.x + wall.w) pieces.push({ x: right, y: wall.y, w: wall.x + wall.w - right, h: wall.h, style: wall.style });
+  } else {
+    // vertical wall: keep the parts above and below the gap
+    if (gap.y > wall.y) pieces.push({ x: wall.x, y: wall.y, w: wall.w, h: gap.y - wall.y, style: wall.style });
+    var bottom = gap.y + gap.h;
+    if (bottom < wall.y + wall.h) pieces.push({ x: wall.x, y: bottom, w: wall.w, h: wall.y + wall.h - bottom, style: wall.style });
+  }
+  return pieces;
+}
+
+// All walls right now: the walls of every open area, with the doors of
+// every open area cut out of them.
+function getWallRects(state) {
+  var walls = [], gaps = [];
+  CONFIG.areas.forEach(function (area) {
+    if (!isAreaOpen(state, area)) return;
+    walls = walls.concat(getAreaWalls(area));
+    gaps = gaps.concat(area.openings || []);
+  });
+  gaps.forEach(function (gap) {
+    var cut = [];
+    walls.forEach(function (w) { cut = cut.concat(cutWall(w, gap)); });
+    walls = cut;
+  });
+  return walls;
+}
+
+// Just the walls (render.js draws these). Rebuilt when an area opens.
+var wallRects = [];
 
 // All solid rectangles nobody can walk through: the walls plus every
-// solid item that has been built. Rebuilt whenever something is bought.
-var solidRects = wallRects.slice();
+// solid item that has been built.
+var solidRects = [];
 
-// Recalculate solidRects from the walls and the bought items.
+// Recalculate the walls and solidRects from what has been bought.
 // Also rebuilds the customers' walking map (path.js), since it depends on this.
 function rebuildSolids(state) {
+  wallRects = getWallRects(state);
   solidRects = wallRects.slice(); // .slice() makes a copy, so wallRects stays walls-only
   getBoughtPads(state).forEach(function (pad) {
     var b = pad.builds;
@@ -143,7 +215,7 @@ function tryBuyPads(state) {
 
     // a little floating "-25" above the pad (nothing for free pads)
     if (pad.price > 0) {
-      addFloater(state, '-' + pad.price, pad.pad.x + pad.pad.w / 2, pad.pad.y, CONFIG.colors.spend);
+      addFloater(state, '-' + formatNumber(pad.price), pad.pad.x + pad.pad.w / 2, pad.pad.y, CONFIG.colors.spend);
     }
     return pad;
   }
@@ -165,36 +237,45 @@ function updateFloaters(state) {
   });
 }
 
-// ---------- Machines and drinks ----------
+// ---------- Machines and the menu ----------
 
-// All built machines.
+// All built machines (and ovens, blenders...: anything that makes an item).
 function getBuiltMachines(state) {
-  return getBoughtPads(state).filter(function (pad) { return pad.builds.type === 'machine'; });
+  return getBoughtPads(state).filter(function (pad) { return !!pad.builds.makes; });
 }
 
-// The drinks customers can order right now (one per built machine).
-function getAvailableDrinks(state) {
-  var drinks = [];
+// The built machine that makes this item (or null).
+function getMachineFor(state, itemId) {
+  var list = getBuiltMachines(state);
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].builds.makes === itemId) return list[i];
+  }
+  return null;
+}
+
+// The items customers can order right now (one per built machine).
+function getAvailableMenu(state) {
+  var items = [];
   getBuiltMachines(state).forEach(function (pad) {
-    if (drinks.indexOf(pad.builds.drink) === -1) drinks.push(pad.builds.drink);
+    if (items.indexOf(pad.builds.makes) === -1) items.push(pad.builds.makes);
   });
-  return drinks;
+  return items;
 }
 
-// A machine's live status: { ready: drinks waiting on the tray, timer: seconds brewed }
+// A machine's live status: { ready: items waiting on the tray, timer: seconds brewed }
 function getMachineState(state, padId) {
   if (!state.machines[padId]) state.machines[padId] = { ready: 0, timer: 0 };
   return state.machines[padId];
 }
 
-// Let every machine brew. A machine works on one drink at a time and
+// Let every machine brew. A machine works on one item at a time and
 // stops once its tray is full (CONFIG.machine.holds).
 function updateMachines(state, dt) {
   getBuiltMachines(state).forEach(function (pad) {
     var ms = getMachineState(state, pad.id);
     if (ms.ready >= CONFIG.machine.holds) { ms.timer = 0; return; }
     ms.timer += dt;
-    var brewTime = CONFIG.drinks[pad.builds.drink].brewSeconds;
+    var brewTime = CONFIG.menu[pad.builds.makes].brewSeconds;
     if (ms.timer >= brewTime) {
       ms.timer = 0;
       ms.ready += 1;
@@ -202,16 +283,19 @@ function updateMachines(state, dt) {
   });
 }
 
-// How many customers are waiting for this drink (ordered, not served yet)?
-function countWanted(state, drinkId) {
-  return state.customers.filter(function (c) {
-    return c.order === drinkId && !c.served;
-  }).length;
+// How many of this item are customers still waiting for?
+// (c.orders holds the items a customer ordered but hasn't received yet)
+function countWanted(state, itemId) {
+  var n = 0;
+  state.customers.forEach(function (c) {
+    c.orders.forEach(function (o) { if (o === itemId) n++; });
+  });
+  return n;
 }
 
-// How many of this drink is the barista holding?
-function countCarried(state, drinkId) {
-  return state.carrying.filter(function (d) { return d === drinkId; }).length;
+// How many of this item is the barista holding?
+function countCarried(state, itemId) {
+  return state.carrying.filter(function (d) { return d === itemId; }).length;
 }
 
 // Is the player close enough to touch this rectangle?
@@ -220,42 +304,46 @@ function playerCanReach(state, rect) {
   return overlapsRect(p.x, p.y, p.radius + CONFIG.player.reach, rect);
 }
 
-// Pick up a finished drink when the barista walks up to a machine.
-// Only picks up drinks that someone ordered and that the barista isn't
+// Pick up a finished item when the barista walks up to a machine.
+// Only picks up items that someone ordered and that the barista isn't
 // already bringing, so walking past machines never fills your hands
-// with drinks nobody wants. Returns the drink id, or null.
+// with things nobody wants. Returns the item id, or null.
 function tryPickup(state) {
   if (state.carrying.length >= CONFIG.player.carry) return null;
   var machines = getBuiltMachines(state);
 
   for (var i = 0; i < machines.length; i++) {
     var pad = machines[i];
-    var drink = pad.builds.drink;
+    var item = pad.builds.makes;
     var ms = getMachineState(state, pad.id);
     if (ms.ready <= 0 || !playerCanReach(state, pad.builds)) continue;
-    if (countWanted(state, drink) <= countCarried(state, drink)) continue;
+    if (countWanted(state, item) <= countCarried(state, item)) continue;
 
     ms.ready -= 1;
-    state.carrying.push(drink);
-    return drink;
+    state.carrying.push(item);
+    return item;
   }
   return null;
 }
 
 // ---------- Seats ----------
 
-// All seats at built tables. A table with 2 seats has a chair on its
-// left and right side. Each seat: { key, x, y, faceX } (faceX = which
-// way the sitter looks: 1 = right, toward the table on their right).
+// All seats at built tables (anything with "seats" in its config).
+// 2 seats = a chair left and right; 4 seats = also one above and below.
+// Each seat: { key, x, y, faceX, faceY } (face = which way the sitter looks).
 function getSeats(state) {
   var seats = [];
   var off = CONFIG.customers.seatOffset;
   getBoughtPads(state).forEach(function (pad) {
     var b = pad.builds;
-    if (b.type !== 'table') return;
-    var cy = b.y + b.h / 2;
-    seats.push({ key: pad.id + ':L', x: b.x - off, y: cy, faceX: 1 });
-    if (b.seats >= 2) seats.push({ key: pad.id + ':R', x: b.x + b.w + off, y: cy, faceX: -1 });
+    if (!b.seats) return;
+    var cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    seats.push({ key: pad.id + ':L', x: b.x - off, y: cy, faceX: 1, faceY: 0 });
+    seats.push({ key: pad.id + ':R', x: b.x + b.w + off, y: cy, faceX: -1, faceY: 0 });
+    if (b.seats >= 4) {
+      seats.push({ key: pad.id + ':T', x: cx, y: b.y - off, faceX: 0, faceY: 1 });
+      seats.push({ key: pad.id + ':B', x: cx, y: b.y + b.h + off, faceX: 0, faceY: -1 });
+    }
   });
   return seats;
 }
@@ -276,7 +364,10 @@ function getCozyBonus(state) {
   }, 0);
 }
 
-// What a customer pays for a drink, including the cozy bonus.
-function getDrinkPayment(state, drinkId) {
-  return Math.round(CONFIG.drinks[drinkId].price * (1 + getCozyBonus(state) / 100));
+// What a customer pays for one item, including the cozy bonus
+// (and the VIP multiplier for ★ customers).
+function getItemPayment(state, itemId, vip) {
+  var pay = CONFIG.menu[itemId].price * (1 + getCozyBonus(state) / 100);
+  if (vip) pay *= CONFIG.customers.vipPayMultiplier;
+  return Math.round(pay);
 }

@@ -5,6 +5,8 @@
   --coffee-soft: rgba(59, 42, 32, 0.78);
   --green: #8fb87a;
   --sky: #a8c98a;
+  --gold: #f2c14e;
+  --green-dark: #4f7a5a;
 }
 
 /* ===== Page: fill the screen, no scrolling, no zoom, no text selection ===== */
@@ -107,6 +109,80 @@ html, body {
   cursor: pointer;
 }
 
+/* ===== Celebration banner (top center) ===== */
+#banner {
+  position: fixed;
+  left: 50%;
+  top: max(14px, env(safe-area-inset-top));
+  transform: translate(-50%, -140%);
+  max-width: calc(100% - 140px);
+  background: #fff6e8;
+  color: var(--coffee);
+  border: 3px solid var(--gold);
+  border-radius: 18px;
+  padding: 8px 20px 10px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transition: opacity 0.35s, transform 0.35s;
+}
+#banner.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  animation: wiggle 0.6s ease-out;
+}
+#banner-title { font-size: 20px; font-weight: 800; }
+#banner-text { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+#banner-text:empty { display: none; }
+@keyframes wiggle {
+  0%   { transform: translate(-50%, 0) scale(0.7); }
+  50%  { transform: translate(-50%, 0) scale(1.06); }
+  100% { transform: translate(-50%, 0) scale(1); }
+}
+
+/* ===== Settings panel ===== */
+#settings {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 28, 20, 0.55); /* dims the café behind; also catches taps */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#settings[hidden] { display: none; }
+.panel {
+  background: #fff6e8;
+  color: var(--coffee);
+  border-radius: 20px;
+  padding: 14px 20px 16px;
+  width: min(380px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+.panel h2 { margin: 2px 0 8px; font-size: 20px; }
+.panel p { font-size: 14px; margin: 6px 0 10px; }
+#stats { list-style: none; margin: 0 0 10px; padding: 0; font-size: 14px; }
+#stats li { display: flex; justify-content: space-between; padding: 3px 4px; border-bottom: 1px dashed #e3d2b8; }
+.row { display: flex; gap: 8px; justify-content: center; }
+.btn {
+  min-height: 44px;           /* big enough for a thumb */
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #efe3d0;
+  color: var(--coffee);
+}
+.btn-main { background: var(--green-dark); color: #fff6e8; width: 100%; margin-top: 10px; }
+.btn-soft { background: transparent; color: #b5523b; text-decoration: underline; }
+.btn-danger { background: #c4574a; color: #fff6e8; }
+
 /* ===== Rotate overlay: hidden in landscape ===== */
 #rotate {
   display: none;
@@ -145,5 +221,5 @@ html, body {
 /* ===== Portrait: show the overlay, hide the game ===== */
 @media (orientation: portrait) {
   #rotate { display: flex; }
-  #game, #hud { display: none; }
+  #game, #hud, #settings { display: none; }
 }
