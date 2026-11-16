@@ -102,7 +102,7 @@ Don't start the next part until the current one works and is committed.
 
 - [x] **Part 1 — Skeleton:** landscape canvas, HUD (cash, income, settings
       button), rotate overlay, shop floor drawn.
-- [ ] **Part 2 — Player movement:** joystick + keys, barista character,
+- [x] **Part 2 — Player movement:** joystick + keys, barista character,
       camera follows, walls block movement.
 - [ ] **Part 3 — Buy pads:** step on a pad with enough cash to build a piece;
       cash shown in the HUD.

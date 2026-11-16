@@ -23,7 +23,23 @@ var CONFIG = {
 
   // --- Camera / zoom ---
   view: {
-    tilesVisibleY: 14, // how many tiles fit top-to-bottom on screen (bigger = zoomed out)
+    tilesVisibleY: 14,  // how many tiles fit top-to-bottom on screen (bigger = zoomed out)
+    followSpeed: 6,     // how quickly the camera catches up with the player (higher = snappier)
+  },
+
+  // --- The player (your barista) ---
+  player: {
+    speed: 5,       // walking speed, in tiles per second
+    radius: 0.45,   // size of the player's body, in tiles (also used for bumping into walls)
+    startX: 16,     // where a new game starts, in tiles (middle of the shop...)
+    startY: 14,     // (...just inside the door)
+  },
+
+  // --- On-screen joystick (touch anywhere to make it appear) ---
+  joystick: {
+    radius: 55,      // size of the joystick base, in screen pixels
+    knobRadius: 24,  // size of the knob you drag, in screen pixels
+    deadZone: 0.15,  // ignore tiny drags below this fraction of the radius (0..1)
   },
 
   // --- Starting values for a brand new game ---
@@ -39,5 +55,8 @@ var CONFIG = {
     floorDark: '#e0caa7',  // checker pattern on the floor
     wall: '#7a5238',       // shop walls
     buildArea: '#b08a64',  // dashed outline of the empty "build here" area
+    playerBody: '#f2c9a0', // the barista's skin/head
+    playerApron: '#4f7a5a',// the barista's green apron
+    shadow: 'rgba(0, 0, 0, 0.18)', // soft shadow under characters
   },
 };
