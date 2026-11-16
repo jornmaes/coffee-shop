@@ -97,8 +97,10 @@ function drawWalls() {
 
 // Trace a rounded rectangle path (in screen pixels). Call fill/stroke after.
 function roundRectPath(x, y, w, h, radius) {
-  var r = Math.min(radius, w / 2, h / 2);
   ctx.beginPath();
+  if (w <= 0 || h <= 0) return; // nothing to draw (e.g. first frame of a pop-in)
+  // corner size can't be negative or bigger than half the box
+  var r = Math.max(0, Math.min(radius, w / 2, h / 2));
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
   ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -175,7 +177,10 @@ function popScale(state, padId) {
   var t = Math.min(1, (state.time - builtAt) / CONFIG.effects.buildPopTime);
   // "ease out back" curve: goes a bit past 1, then settles
   var c = 1.7;
-  return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+  var scale = 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+  // At t = 0 this should be exactly 0, but rounding makes it a tiny
+  // negative number, and negative sizes crash canvas drawing. Clamp it.
+  return Math.max(0, scale);
 }
 
 // Draw one built item. (x, y, w, h) is its box in screen pixels.

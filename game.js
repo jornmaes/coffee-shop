@@ -71,6 +71,11 @@ function update(dt) {
 // The main loop: runs once per screen refresh (~60 times a second).
 var lastTime = performance.now();
 function loop(now) {
+  // Ask for the next frame FIRST. If something below ever throws an error,
+  // the game keeps running (the error still shows in the console)
+  // instead of freezing on a half-drawn frame.
+  requestAnimationFrame(loop);
+
   // dt = seconds since last frame. Capped so a sleeping tab
   // doesn't cause one giant jump when it wakes up.
   var dt = Math.min((now - lastTime) / 1000, 0.1);
@@ -79,8 +84,6 @@ function loop(now) {
   update(dt);
   drawWorld(state);
   updateHud();
-
-  requestAnimationFrame(loop);
 }
 
 // ----- Start the game -----
