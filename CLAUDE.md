@@ -92,6 +92,21 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   (asks for confirmation first). A 🔊 button next to ⚙ mutes everything.
 - Calm, cute tone: soft colors, rounded shapes, gentle animations, no pressure.
 
+## Play / install
+
+- **Live game:** https://jornmaes.github.io/coffee-shop/ (GitHub Pages,
+  served from the `master` branch). Every `git push` updates it within a
+  minute or two; an open game picks up the new version when it's reloaded.
+- **Android:** open the link in Chrome → ⋮ menu → *Add to home screen* /
+  *Install app*.
+- **iPhone:** open the link in **Safari** → Share button → *Add to Home
+  Screen*. A home-screen game keeps its own save, separate from Safari, so
+  always play from the icon.
+- The save lives on the phone and belongs to this web address: moving the
+  game to another address starts a new save.
+- The icon is `icon-*.png` / `apple-touch-icon.png`, drawn by
+  `tools/icon.html` (the only image files; the game itself draws everything).
+
 ## Tech
 
 - **Plain HTML, CSS and JavaScript.** No frameworks, no libraries, no npm.
@@ -250,5 +265,6 @@ Don't start the next part until the current one works and is committed.
       switches and a mute button), keep-screen-on, a smoothly counting cash
       display, order bubbles that pop up, gently swaying seated customers,
       butterflies over the grass, a two-column settings panel.
-- [ ] **Part 13 — Phone install:** web app manifest (landscape orientation,
-      fullscreen) and icon so it can be added to the home screen.
+- [x] **Part 13 — Phone install:** web app manifest (landscape orientation,
+      fullscreen) and icon so it can be added to the home screen; a
+      tap-to-start title card; hosted on GitHub Pages.
