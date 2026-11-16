@@ -68,16 +68,80 @@ function tryBuyPads(state) {
     state.builtAt[pad.id] = state.time; // remembered for the pop-in animation
     rebuildSolids(state);
 
-    // a little floating "-25" above the pad
-    state.floaters.push({
-      text: '-' + pad.price,
-      x: pad.pad.x + pad.pad.w / 2,
-      y: pad.pad.y,
-      born: state.time,
-    });
+    // a little floating "-25" above the pad (nothing for free pads)
+    if (pad.price > 0) {
+      addFloater(state, '-' + pad.price, pad.pad.x + pad.pad.w / 2, pad.pad.y, CONFIG.colors.spend);
+    }
     return pad;
   }
   return null;
+}
+
+// Add a floating text (like "-25" or "+3") at a world position.
+function addFloater(state, text, x, y, color) {
+  state.floaters.push({ text: text, x: x, y: y, color: color, born: state.time });
+}
+
+// ---------- Machines and the register ----------
+
+// Has the register appeared yet? (it comes with the counter)
+function isRegisterBuilt(state) {
+  return !!state.bought[CONFIG.register.requires];
+}
+
+// All built machines (items that have a "brew" setting).
+function getBuiltMachines(state) {
+  return CONFIG.pads.filter(function (pad) {
+    return state.bought[pad.id] && pad.builds.brew;
+  });
+}
+
+// Total coins per second from all built machines (shown in the HUD).
+function getIncomePerSecond(state) {
+  return getBuiltMachines(state).reduce(function (sum, pad) {
+    return sum + pad.builds.brew.coins / pad.builds.brew.seconds;
+  }, 0);
+}
+
+// Let every machine brew. Each one has its own timer; when the timer
+// reaches its brew time, its coins go into the register.
+function updateMachines(state, dt) {
+  if (!isRegisterBuilt(state)) return;
+  var cap = CONFIG.register.cap;
+  var machines = getBuiltMachines(state);
+
+  for (var i = 0; i < machines.length; i++) {
+    var pad = machines[i];
+    var brew = pad.builds.brew;
+
+    // a full register pauses the machines (nothing is wasted)
+    if (state.register >= cap) return;
+
+    var timer = (state.brewTimers[pad.id] || 0) + dt;
+    // "while" instead of "if", in case a long frame covers several brews
+    while (timer >= brew.seconds && state.register < cap) {
+      timer -= brew.seconds;
+      state.register = Math.min(cap, state.register + brew.coins);
+      addFloater(state, '+' + brew.coins,
+        pad.builds.x + pad.builds.w / 2, pad.builds.y, CONFIG.colors.earn);
+    }
+    state.brewTimers[pad.id] = timer;
+  }
+}
+
+// If the player is standing on the golden mat, move the register's
+// coins into their cash. Returns how many coins were collected.
+function tryCollect(state) {
+  if (!isRegisterBuilt(state) || state.register <= 0) return 0;
+  var player = state.player;
+  if (!overlapsRect(player.x, player.y, player.radius * 0.5, CONFIG.register.mat)) return 0;
+
+  var amount = state.register;
+  state.cash += amount;
+  state.register = 0;
+  var mat = CONFIG.register.mat;
+  addFloater(state, '+' + amount, mat.x + mat.w / 2, mat.y, CONFIG.colors.earn);
+  return amount;
 }
 
 // Remove floating texts that have finished their animation.

@@ -44,8 +44,7 @@ var CONFIG = {
 
   // --- Starting values for a brand new game ---
   start: {
-    cash: 120,      // coins you start with (enough for the first pads until
-                    // Part 4 adds income; lower this later)
+    cash: 25,       // coins you start with (enough for the first espresso machine)
   },
 
   // --- Buy pads ---
@@ -54,32 +53,49 @@ var CONFIG = {
   // (null = visible from the start). This is the build order.
   //   id       unique name used in the save file (don't rename once players have saves)
   //   name     label shown above the pad
-  //   price    cost in coins
+  //   price    cost in coins (0 = free, the pad says "FREE")
   //   pad      where the pad sits: x, y, w, h in tiles
   //   builds   what appears: type (how it's drawn), x, y, w, h in tiles,
   //            solid (true = you can't walk through it)
+  //            brew (machines only): puts `coins` in the register every `seconds`
   pads: [
     {
-      id: 'counter', name: 'Counter', price: 25, requires: null,
+      id: 'counter', name: 'Counter', price: 0, requires: null,
       pad:    { x: 15,   y: 10.5, w: 2,   h: 1.2 },
       builds: { type: 'counter', x: 12, y: 8, w: 8, h: 1.2, solid: true },
     },
     {
-      id: 'espresso1', name: 'Espresso Machine', price: 60, requires: 'counter',
+      id: 'espresso1', name: 'Espresso Machine', price: 25, requires: 'counter',
       pad:    { x: 8.5,  y: 8,    w: 2,   h: 1.2 },
-      builds: { type: 'espresso', x: 13, y: 5.8, w: 1.6, h: 1.2, solid: true },
+      builds: { type: 'espresso', x: 13, y: 5.8, w: 1.6, h: 1.2, solid: true,
+                brew: { coins: 3, seconds: 2 } },
     },
     {
       id: 'table1', name: 'Cozy Table', price: 30, requires: 'espresso1',
       pad:    { x: 23.5, y: 12.2, w: 2,   h: 1.2 },
       builds: { type: 'table', x: 20.6, y: 12, w: 1.6, h: 1.6, solid: true },
     },
+    {
+      id: 'espresso2', name: 'Espresso Machine 2', price: 100, requires: 'espresso1',
+      pad:    { x: 8.5,  y: 5.8,  w: 2,   h: 1.2 },
+      builds: { type: 'espresso', x: 15.2, y: 5.8, w: 1.6, h: 1.2, solid: true,
+                brew: { coins: 4, seconds: 2 } },
+    },
   ],
+
+  // --- Cash register ---
+  // Machines brew coins into the register; walk onto the golden mat to collect.
+  register: {
+    requires: 'counter',                       // appears together with this pad's item
+    box: { x: 18.3, y: 8.15, w: 1.1, h: 0.9 }, // the register drawn on the counter, in tiles
+    mat: { x: 17.6, y: 9.5,  w: 2.4, h: 1.1 }, // where you stand to collect, in tiles
+    cap: 1000,      // most coins the register can hold; machines pause when it's full
+  },
 
   // --- Effects ---
   effects: {
     buildPopTime: 0.35,  // seconds a new item takes to "pop" into place
-    floatTextTime: 1.2,  // seconds the "-25" text floats up after buying
+    floatTextTime: 1.2,  // seconds the "-25" / "+3" texts float up
   },
 
   // --- Colors used when drawing the world ---
@@ -100,5 +116,9 @@ var CONFIG = {
     woodLight: '#c79a72',  // top edge highlight on wood
     metal: '#8d949b',      // machines
     metalDark: '#5f666d',  // machine details
+    mat: '#e8b84a',        // golden collect mat in front of the register
+    matGlow: '#ffd36b',    // its glow when there are coins to collect
+    spend: '#b5523b',      // floating text for money spent
+    earn: '#3f8a3a',       // floating text for money earned
   },
 };

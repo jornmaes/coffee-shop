@@ -106,7 +106,7 @@ Don't start the next part until the current one works and is committed.
       camera follows, walls block movement.
 - [x] **Part 3 — Buy pads:** step on a pad with enough cash to build a piece;
       cash shown in the HUD.
-- [ ] **Part 4 — Earning:** machines brew coins into the register; walk over
+- [x] **Part 4 — Earning:** machines brew coins into the register; walk over
       the register to collect.
 - [ ] **Part 5 — Saving:** localStorage with versioning and safe defaults.
 - [ ] **Part 6 — Build order:** the full chain of pads

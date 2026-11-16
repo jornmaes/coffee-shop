@@ -5,8 +5,9 @@
 // Everything that describes "where the game is right now".
 var state = {
   cash: CONFIG.start.cash,  // coins the player has
-  income: 0,                // coins earned per second (machines come later)
-  time: 0,                  // seconds since the game was opened (drives animations)
+  register: 0,              // coins waiting in the register to be collected
+  brewTimers: {},           // per machine: seconds since its last brew
+  time: 0,                // seconds since the game was opened (drives animations)
 
   bought: {},               // which pads are bought, e.g. { counter: true }
   builtAt: {},              // when each item was bought this session (for the pop-in)
@@ -31,7 +32,9 @@ var incomeEl = document.getElementById('income');
 // Show the current cash and income in the HUD.
 function updateHud() {
   cashEl.textContent = '☕ ' + Math.floor(state.cash);
-  incomeEl.textContent = '+' + state.income + '/s';
+  // show whole numbers as "3", others with one decimal, like "3.5"
+  var income = getIncomePerSecond(state);
+  incomeEl.textContent = '+' + (Math.round(income * 10) / 10) + '/s';
 }
 
 // Called whenever the screen size or orientation changes.
@@ -64,6 +67,8 @@ function update(dt) {
   updateInput();
   updatePlayer(dt);
   tryBuyPads(state);
+  updateMachines(state, dt);
+  tryCollect(state);
   updateFloaters(state);
   followCamera(state.player, dt);
 }

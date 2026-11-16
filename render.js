@@ -151,7 +151,7 @@ function drawPads(state) {
     // price on the pad
     ctx.fillStyle = col.padText;
     setFont(0.55, 700);
-    ctx.fillText('☕ ' + pad.price, s.x + w / 2, s.y + h / 2);
+    ctx.fillText(pad.price === 0 ? 'FREE' : '☕ ' + pad.price, s.x + w / 2, s.y + h / 2);
 
     // name in a little label above the pad
     setFont(0.45, 600);
@@ -261,6 +261,67 @@ function drawBuiltItems(state) {
   }
 }
 
+// Draw the cash register on the counter, how many coins it holds,
+// and the golden mat you stand on to collect them.
+function drawRegister(state) {
+  if (!isRegisterBuilt(state)) return;
+  var reg = CONFIG.register;
+  var col = CONFIG.colors;
+  var u = camera.scale;
+  // pop in together with the counter
+  var scale = popScale(state, reg.requires);
+  var hasCoins = state.register > 0;
+
+  ctx.save();
+
+  // --- the mat ---
+  var mc = worldToScreen(reg.mat.x + reg.mat.w / 2, reg.mat.y + reg.mat.h / 2);
+  var mw = reg.mat.w * u * scale, mh = reg.mat.h * u * scale;
+  if (hasCoins) {
+    var pulse = 0.5 + 0.5 * Math.sin(state.time * 5);
+    ctx.shadowColor = col.matGlow;
+    ctx.shadowBlur = u * (0.3 + 0.5 * pulse);
+  }
+  ctx.fillStyle = col.mat;
+  roundRectPath(mc.x - mw / 2, mc.y - mh / 2, mw, mh, u * 0.25);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.lineWidth = Math.max(2, u * 0.07);
+  ctx.stroke();
+  if (scale > 0.5) {
+    ctx.fillStyle = col.padText;
+    setFont(0.4, 800);
+    ctx.fillText('COLLECT', mc.x, mc.y);
+  }
+
+  // --- the register box on the counter ---
+  var bc = worldToScreen(reg.box.x + reg.box.w / 2, reg.box.y + reg.box.h / 2);
+  var bw = reg.box.w * u * scale, bh = reg.box.h * u * scale;
+  ctx.fillStyle = '#4a3a30';
+  roundRectPath(bc.x - bw / 2, bc.y - bh / 2, bw, bh, u * 0.12);
+  ctx.fill();
+  ctx.fillStyle = '#9fd6a0'; // little green display
+  roundRectPath(bc.x - bw * 0.35, bc.y - bh * 0.35, bw * 0.7, bh * 0.3, u * 0.05);
+  ctx.fill();
+
+  // --- how many coins are waiting, in a bubble above the register ---
+  if (scale > 0.5) {
+    setFont(0.45, 700);
+    var label = '☕ ' + state.register + (state.register >= reg.cap ? ' FULL' : '');
+    var lw = ctx.measureText(label).width + u * 0.5;
+    var lh = u * 0.65;
+    var ly = bc.y - bh / 2 - lh - u * 0.1;
+    ctx.fillStyle = 'rgba(255, 246, 232, 0.92)';
+    roundRectPath(bc.x - lw / 2, ly, lw, lh, lh / 2);
+    ctx.fill();
+    ctx.fillStyle = col.padText;
+    ctx.fillText(label, bc.x, ly + lh / 2);
+  }
+
+  ctx.restore();
+}
+
 // Draw the "-25" texts that float up and fade after buying something.
 function drawFloaters(state) {
   var life = CONFIG.effects.floatTextTime;
@@ -274,7 +335,7 @@ function drawFloaters(state) {
     ctx.lineWidth = camera.scale * 0.12;
     ctx.strokeStyle = '#fff6e8';
     ctx.strokeText(f.text, s.x, s.y);
-    ctx.fillStyle = '#b5523b';
+    ctx.fillStyle = f.color;
     ctx.fillText(f.text, s.x, s.y);
   }
   ctx.restore();
@@ -390,6 +451,7 @@ function drawWorld(state) {
   if (Object.keys(state.bought).length === 0) drawBuildArea();
   drawPads(state);
   drawBuiltItems(state);
+  drawRegister(state);
   drawPlayer(state.player);
   drawFloaters(state);
   drawJoystick(); // last, so it sits on top of everything
