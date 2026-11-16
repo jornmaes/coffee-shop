@@ -537,19 +537,47 @@ document.addEventListener('visibilitychange', function () {
 });
 
 // Sound may only start after a touch or key press (a browser rule).
-// The wake lock likes a touch too.
+// The wake lock likes a touch too. (iPhones only count the END of a
+// touch, so we listen for that as well.)
 function onFirstTouch() {
   startAudio();
   updateWakeLock();
 }
 window.addEventListener('pointerdown', onFirstTouch);
+window.addEventListener('touchend', onFirstTouch);
 window.addEventListener('keydown', onFirstTouch);
 window.addEventListener('pagehide', save);
 
+// ---------- Tap-to-start title card ----------
+// The café is drawn (dimmed) behind the card but waits until the first
+// tap, which also starts the sound.
+var startEl = document.getElementById('start');
+
+// Show the title card; returning players get a "welcome back".
+function showStartCard(hadSave) {
+  if (hadSave) {
+    document.getElementById('start-text').textContent = 'Welcome back! ☕ ' + cashText(state.cash);
+  }
+  state.paused = true;
+  startEl.addEventListener('click', hideStartCard);
+  window.addEventListener('keydown', hideStartCard);
+}
+
+// Fade the card out and let the café run.
+function hideStartCard() {
+  if (startEl.hidden || startEl.classList.contains('hide')) return;
+  onFirstTouch();
+  startEl.classList.add('hide');
+  setTimeout(function () { startEl.hidden = true; }, 450); // after the fade
+  window.removeEventListener('keydown', hideStartCard);
+  state.paused = false;
+}
+
 rebuildSolids(state); // walls only, for a new game
-loadGame(state);      // bring back saved progress, if any (also rebuilds solids)
+var hadSave = loadGame(state) !== null; // bring back saved progress, if any (also rebuilds solids)
 shownCash = state.cash; // start the cash display at the right number
 setUpToggles();
 updateWakeLock();
+showStartCard(hadSave);
 onResize();
 requestAnimationFrame(loop);

@@ -212,6 +212,50 @@ html, body {
 #cheat-buttons { flex-wrap: wrap; }
 #cheat-buttons .btn { padding: 0 12px; background: #e3cdea; }
 
+/* ===== Tap-to-start title card ===== */
+#start {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 28, 20, 0.6); /* the café shows through, dimmed */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  cursor: pointer;
+  transition: opacity 0.4s;
+}
+#start.hide { opacity: 0; pointer-events: none; }
+#start[hidden] { display: none; }
+.start-card {
+  background: var(--cream);
+  color: var(--coffee);
+  border: 3px solid var(--gold);
+  border-radius: 24px;
+  padding: 16px 32px 14px;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  animation: wiggle-in 0.6s ease-out;
+}
+.start-icon { width: 72px; height: 72px; border-radius: 18px; display: block; margin: 0 auto 6px; }
+.start-card h1 { margin: 0; font-size: 26px; font-weight: 800; }
+#start-text { margin: 4px 0 10px; font-size: 15px; opacity: 0.85; }
+.start-tap {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--green-dark);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.96); }
+}
+@keyframes wiggle-in {
+  0%   { transform: scale(0.7); opacity: 0; }
+  60%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 /* ===== Rotate overlay: hidden in landscape ===== */
 #rotate {
   display: none;
@@ -250,5 +294,5 @@ html, body {
 /* ===== Portrait: show the overlay, hide the game ===== */
 @media (orientation: portrait) {
   #rotate { display: flex; }
-  #game, #hud, #settings { display: none; }
+  #game, #hud, #settings, #start { display: none; }
 }
