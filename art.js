@@ -367,7 +367,7 @@ function drawMachine(pad, x, y, w, h, k, state) {
   var b = pad.builds;
   var item = CONFIG.menu[b.makes];
   var ms = state.machines[pad.id] || { ready: 0, timer: 0 };
-  var brewing = ms.ready < CONFIG.machine.holds;
+  var brewing = ms.ready < getTrayHolds(state); // still room on the tray: keep making
   var t = state.time;
 
   // the body; returns where the finished item sits
@@ -380,17 +380,49 @@ function drawMachine(pad, x, y, w, h, k, state) {
 
   if (brewing) {
     // progress bar under the machine
-    var progress = Math.min(1, ms.timer / item.brewSeconds);
+    var progress = Math.min(1, ms.timer / getBrewSeconds(state, pad));
     fillRoundRect(x + w * 0.1, y + h + k * 0.08, w * 0.8, k * 0.12, k * 0.06, 'rgba(59, 42, 32, 0.25)');
     fillRoundRect(x + w * 0.1, y + h + k * 0.08, w * 0.8 * progress, k * 0.12, k * 0.06, item.machineColor);
-  } else {
+  }
+  if (ms.ready > 0) {
     // the finished item waiting, bobbing gently, with a little sparkle
     var bob = Math.sin(t * 4) * k * 0.03;
     drawMenuItem(b.makes, spot.x, spot.y + bob, k * 0.55);
     ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 5);
     drawSparkle(spot.x + k * 0.3, spot.y - k * 0.25, k * 0.08, '#ffffff');
     ctx.globalAlpha = 1;
+    // more than one ready (bigger trays): a small "×2" badge
+    if (ms.ready > 1) drawCountBadge(spot.x + k * 0.32, spot.y + k * 0.18, k, '×' + ms.ready);
   }
+  drawLevelStars(x, y, w, h, k, getMachineLevel(state, pad.id));
+}
+
+// Little gold stars across the top of a machine: one per level above 1
+// (a ★3 machine shows two stars). Nothing for level 1.
+function drawLevelStars(x, y, w, h, k, level) {
+  var n = level - 1;
+  if (n <= 0) return;
+  var size = k * 0.14, gap = k * 0.32;
+  var startX = x + w / 2 - gap * (n - 1) / 2;
+  var starY = y + k * 0.16;
+  for (var i = 0; i < n; i++) {
+    // a slightly bigger dark star behind each gold one, as an outline
+    drawStar(startX + i * gap, starY, size * 1.35, 'rgba(90, 60, 20, 0.6)');
+    drawStar(startX + i * gap, starY, size, CONFIG.colors.levelStar);
+  }
+}
+
+// A small rounded label with a number on it, like "×2".
+function drawCountBadge(cx, cy, k, text) {
+  ctx.save();
+  ctx.font = '800 ' + Math.round(k * 0.24) + 'px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var w = ctx.measureText(text).width + k * 0.14, h = k * 0.3;
+  fillRoundRect(cx - w / 2, cy - h / 2, w, h, h / 2, 'rgba(255, 250, 240, 0.95)');
+  ctx.fillStyle = CONFIG.colors.padText;
+  ctx.fillText(text, cx, cy);
+  ctx.restore();
 }
 
 // Steam puffs rising from a point.

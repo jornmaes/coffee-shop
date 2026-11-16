@@ -200,13 +200,15 @@ function setFont(sizeInTiles, weight) {
 // drawn later, on top of everything: see drawPadLabels).
 // Affordable pads glow and pulse; pads you can't afford yet are muted.
 // Expansion pads are bigger and golden, with sparkles.
+// Upgrade pads are blue, with a little arrow.
 function drawPads(state) {
   var col = CONFIG.colors;
   getVisiblePads(state).forEach(function (pad) {
     var r = pad.pad;
     var affordable = state.cash >= pad.price;
     var golden = pad.builds.type === 'expansion';
-    var glowColor = golden ? col.padGold : col.pad;
+    var upgrade = pad.builds.type === 'upgrade';
+    var glowColor = golden ? col.padGold : (upgrade ? col.padUpgrade : col.pad);
     var s = worldToScreen(r.x, r.y);
     var k = camera.scale;
     var w = r.w * k, h = r.h * k;
@@ -218,7 +220,7 @@ function drawPads(state) {
       ctx.shadowColor = glowColor;
       ctx.shadowBlur = k * (golden ? 0.5 + 0.6 * pulse : 0.3 + 0.4 * pulse);
     }
-    ctx.fillStyle = affordable ? glowColor : (golden ? '#e6d3a8' : col.padTooPricey);
+    ctx.fillStyle = affordable ? glowColor : (golden ? '#e6d3a8' : (upgrade ? '#bfcad2' : col.padTooPricey));
     roundRectPath(s.x, s.y, w, h, k * 0.25);
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -237,10 +239,11 @@ function drawPads(state) {
       ctx.globalAlpha = 1;
     }
 
-    // price on the pad
+    // price on the pad (upgrade pads get an arrow instead of the cup)
     ctx.fillStyle = col.padText;
     setFont(golden ? 0.62 : 0.55, 800);
-    ctx.fillText(pad.price === 0 ? 'FREE' : '☕ ' + formatNumber(pad.price), s.x + w / 2, s.y + h / 2);
+    var icon = upgrade ? '⬆ ' : '☕ ';
+    ctx.fillText(pad.price === 0 ? 'FREE' : icon + formatNumber(pad.price), s.x + w / 2, s.y + h / 2);
     ctx.restore();
   });
 }
@@ -295,7 +298,7 @@ var SHADOWED_TYPES = { counter: true, machine: true, bookshelf: true, chalkboard
 function drawBuiltItems(state, onlyFloor) {
   getBoughtPads(state).forEach(function (pad) {
     var b = pad.builds;
-    if (b.type === 'expansion') return; // opens an area; nothing to draw
+    if (b.type === 'expansion' || b.type === 'upgrade') return; // nothing to draw on the floor
     if (!!b.floor !== onlyFloor) return;
 
     var scale = popScale(state, pad.id);

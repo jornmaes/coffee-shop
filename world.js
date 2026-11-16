@@ -183,11 +183,19 @@ function getPad(id) {
   return null;
 }
 
-// Is this pad on the floor right now? (not bought yet, and the pad it
+// The ids of the pads this pad needs, as a list. In config, "requires" is
+// null (nothing), one id ('latte') or a list of ids (['latte', 'cafeUp4']).
+function getRequires(pad) {
+  if (pad.requires === null) return [];
+  if (Array.isArray(pad.requires)) return pad.requires;
+  return [pad.requires];
+}
+
+// Is this pad on the floor right now? (not bought yet, and every pad it
 // depends on has been bought)
 function isPadVisible(state, pad) {
   if (state.bought[pad.id]) return false;
-  return pad.requires === null || !!state.bought[pad.requires];
+  return getRequires(pad).every(function (id) { return !!state.bought[id]; });
 }
 
 // List of pads currently on the floor.
@@ -202,16 +210,28 @@ function tryBuyPads(state) {
   // the player counts as "on" a pad once their middle half overlaps it
   var reach = player.radius * 0.5;
   var pads = getVisiblePads(state);
+  // Pads that popped up right under the barista's feet (the next upgrade on
+  // the same spot) wait until the barista steps off them once. Otherwise one
+  // step could buy a whole chain of upgrades in a row.
+  if (!state.padsUnderFeet) state.padsUnderFeet = {};
 
   for (var i = 0; i < pads.length; i++) {
     var pad = pads[i];
-    if (!overlapsRect(player.x, player.y, reach, pad.pad)) continue;
+    if (!overlapsRect(player.x, player.y, reach, pad.pad)) {
+      delete state.padsUnderFeet[pad.id]; // stepped off: it can be bought next time
+      continue;
+    }
+    if (state.padsUnderFeet[pad.id]) continue;
     if (state.cash < pad.price) continue; // not enough yet: nothing happens, no penalty
 
     state.cash -= pad.price;
     state.bought[pad.id] = true;
     state.builtAt[pad.id] = state.time; // remembered for the pop-in animation
     rebuildSolids(state);
+    // remember the new pads that just appeared under the barista
+    getVisiblePads(state).forEach(function (next) {
+      if (overlapsRect(player.x, player.y, reach, next.pad)) state.padsUnderFeet[next.id] = true;
+    });
 
     // a little floating "-25" above the pad (nothing for free pads)
     if (pad.price > 0) {
@@ -269,13 +289,15 @@ function getMachineState(state, padId) {
 }
 
 // Let every machine brew. A machine works on one item at a time and
-// stops once its tray is full (CONFIG.machine.holds).
+// stops once its tray is full (see getTrayHolds).
 function updateMachines(state, dt) {
+  var holds = getTrayHolds(state);
+  var levelUps = getLevelUps(state);
   getBuiltMachines(state).forEach(function (pad) {
     var ms = getMachineState(state, pad.id);
-    if (ms.ready >= CONFIG.machine.holds) { ms.timer = 0; return; }
+    if (ms.ready >= holds) { ms.timer = 0; return; }
     ms.timer += dt;
-    var brewTime = CONFIG.menu[pad.builds.makes].brewSeconds;
+    var brewTime = getBrewSeconds(state, pad, levelUps);
     if (ms.timer >= brewTime) {
       ms.timer = 0;
       ms.ready += 1;
@@ -309,7 +331,7 @@ function playerCanReach(state, rect) {
 // already bringing, so walking past machines never fills your hands
 // with things nobody wants. Returns the item id, or null.
 function tryPickup(state) {
-  if (state.carrying.length >= CONFIG.player.carry) return null;
+  if (state.carrying.length >= getCarryLimit(state)) return null;
   var machines = getBuiltMachines(state);
 
   for (var i = 0; i < machines.length; i++) {
@@ -364,10 +386,70 @@ function getCozyBonus(state) {
   }, 0);
 }
 
-// What a customer pays for one item, including the cozy bonus
-// (and the VIP multiplier for ★ customers).
+// ---------- Upgrades ----------
+// Upgrade pads don't build anything you can see on the floor: their effect
+// is added up from the bought pads, just like the cozy bonus. That way the
+// list of bought pads (already in the save) is all we need to remember.
+
+// Add up one number field (like carryPlus) over all bought upgrade pads.
+function sumUpgrades(state, field) {
+  return getBoughtPads(state).reduce(function (sum, pad) {
+    return sum + (pad.builds.type === 'upgrade' ? (pad.builds[field] || 0) : 0);
+  }, 0);
+}
+
+// Level-up counts for all machines in one go: { espresso1: 2, latte: 1, ... }
+// (only machines with at least one level-up are listed).
+function getLevelUps(state) {
+  var ups = {};
+  getBoughtPads(state).forEach(function (pad) {
+    var m = pad.builds.machine;
+    if (pad.builds.type === 'upgrade' && m) ups[m] = (ups[m] || 0) + 1;
+  });
+  return ups;
+}
+
+// A machine's level: 1 when built, +1 for every level-up pad bought for it.
+function getMachineLevel(state, machinePadId) {
+  return 1 + (getLevelUps(state)[machinePadId] || 0);
+}
+
+// Seconds this machine needs to make one item. Each level above 1 makes it
+// CONFIG.upgrades.levelBrewMinus percent faster.
+// (levelUps is optional: pass getLevelUps(state) when looping over machines.)
+function getBrewSeconds(state, machinePad, levelUps) {
+  var ups = (levelUps || getLevelUps(state))[machinePad.id] || 0;
+  var factor = Math.pow(1 - CONFIG.upgrades.levelBrewMinus / 100, ups);
+  return CONFIG.menu[machinePad.builds.makes].brewSeconds * factor;
+}
+
+// The price of one item (before cozy bonus and VIPs). Each level of the
+// machine that makes it adds CONFIG.upgrades.levelPricePlus percent.
+function getItemPrice(state, itemId) {
+  var machine = getMachineFor(state, itemId);
+  var level = machine ? getMachineLevel(state, machine.id) : 1;
+  return CONFIG.menu[itemId].price * (1 + CONFIG.upgrades.levelPricePlus * (level - 1) / 100);
+}
+
+// How many items the barista can hold at once.
+function getCarryLimit(state) {
+  return CONFIG.player.carry + sumUpgrades(state, 'carryPlus');
+}
+
+// The barista's walking speed, in tiles per second.
+function getPlayerSpeed(state) {
+  return CONFIG.player.speed * (1 + sumUpgrades(state, 'speedPlus') / 100);
+}
+
+// How many finished items each machine keeps ready on its tray.
+function getTrayHolds(state) {
+  return CONFIG.machine.holds + sumUpgrades(state, 'trayPlus');
+}
+
+// What a customer pays for one item, including machine levels, the cozy
+// bonus (and the VIP multiplier for ★ customers).
 function getItemPayment(state, itemId, vip) {
-  var pay = CONFIG.menu[itemId].price * (1 + getCozyBonus(state) / 100);
+  var pay = getItemPrice(state, itemId) * (1 + getCozyBonus(state) / 100);
   if (vip) pay *= CONFIG.customers.vipPayMultiplier;
   return Math.round(pay);
 }

@@ -173,6 +173,25 @@ function isAreaComplete(state, area) {
   });
 }
 
+// An upgrade was bought: a small puff of confetti and a floating text.
+// (No banner: there are lots of upgrades, banners would get tiring.)
+function celebrateUpgrade(state, pad) {
+  var b = pad.builds;
+  var col = CONFIG.colors;
+  if (b.machine) {
+    // over the machine that leveled up: "★3  +50%"
+    var m = getPad(b.machine).builds;
+    var level = getMachineLevel(state, b.machine);
+    spawnConfetti(state, m.x + m.w / 2, m.y + m.h / 2, 14);
+    addFloater(state, '★' + level + '  +' + CONFIG.upgrades.levelPricePlus + '%', m.x + m.w / 2, m.y, col.levelStar);
+  } else {
+    // a barista upgrade: show its name above the barista
+    var p = state.player;
+    spawnConfetti(state, p.x, p.y, 14);
+    addFloater(state, pad.name + '!', p.x, p.y - 1, col.upgradeText);
+  }
+}
+
 // Something was just bought: celebrate the special moments.
 function celebratePurchase(state, pad) {
   var b = pad.builds;
@@ -188,6 +207,8 @@ function celebratePurchase(state, pad) {
   } else if (b.makes) {
     showBanner('New on the menu!', CONFIG.menu[b.makes].name + ' · ☕ ' + CONFIG.menu[b.makes].price);
     spawnConfetti(state, b.x + b.w / 2, b.y + b.h / 2, 18);
+  } else if (b.type === 'upgrade') {
+    celebrateUpgrade(state, pad);
   }
   // finished an area?
   var home = getPadArea(pad);
@@ -216,7 +237,9 @@ function openSettings() {
   [['Customers served', cashText(state.stats.served)],
    ['Areas open', areas + ' / ' + CONFIG.areas.length],
    ['Pieces built', built + ' / ' + CONFIG.pads.length],
-   ['Cozy bonus', '+' + getCozyBonus(state) + '%']].forEach(function (row) {
+   ['Cozy bonus', '+' + getCozyBonus(state) + '%'],
+   ['Barista carries', getCarryLimit(state) + ' items'],
+   ['Walking speed', '+' + Math.round((getPlayerSpeed(state) / CONFIG.player.speed - 1) * 100) + '%']].forEach(function (row) {
     var li = document.createElement('li');
     var name = document.createElement('span'); name.textContent = row[0];
     var value = document.createElement('b'); value.textContent = row[1];
@@ -266,7 +289,7 @@ function onResize() {
 // Walk the player in the direction the joystick/keys point.
 function updatePlayer(dt) {
   var p = state.player;
-  var speed = CONFIG.player.speed;
+  var speed = getPlayerSpeed(state); // faster with shoe upgrades
 
   p.moving = input.moveX !== 0 || input.moveY !== 0;
   if (!p.moving) return;

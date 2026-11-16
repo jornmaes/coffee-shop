@@ -81,13 +81,15 @@ function loadGame(state) {
 
   // machines: drinks waiting on the tray and brewing progress
   // (only for machines that are bought, with sensible numbers)
+  // (the tray size and brew time depend on upgrades, so this comes after "bought")
   if (data.machines && typeof data.machines === 'object') {
+    var holds = getTrayHolds(state);
     CONFIG.pads.forEach(function (pad) {
       var m = data.machines[pad.id];
       if (!pad.builds.makes || !state.bought[pad.id] || !m || typeof m !== 'object') return;
-      var brewTime = CONFIG.menu[pad.builds.makes].brewSeconds;
+      var brewTime = getBrewSeconds(state, pad);
       state.machines[pad.id] = {
-        ready: isGoodNumber(m.ready) ? Math.max(0, Math.min(CONFIG.machine.holds, Math.floor(m.ready))) : 0,
+        ready: isGoodNumber(m.ready) ? Math.max(0, Math.min(holds, Math.floor(m.ready))) : 0,
         timer: isGoodNumber(m.timer) ? Math.max(0, Math.min(brewTime, m.timer)) : 0,
       };
     });
@@ -97,7 +99,7 @@ function loadGame(state) {
   if (Array.isArray(data.carrying)) {
     state.carrying = data.carrying.filter(function (d) {
       return typeof d === 'string' && CONFIG.menu.hasOwnProperty(d);
-    }).slice(0, CONFIG.player.carry);
+    }).slice(0, getCarryLimit(state));
   }
 
   // stats

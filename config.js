@@ -118,7 +118,14 @@ var CONFIG = {
 
   // --- Machines ---
   machine: {
-    holds: 1,       // how many finished items a machine keeps ready on its tray
+    holds: 1,       // how many finished items a machine keeps ready on its tray (more with tray upgrades)
+  },
+
+  // --- Upgrades (blue pads) ---
+  // Machine level-ups (★2, ★3, ★4) make one machine better. Each level adds:
+  upgrades: {
+    levelPricePlus: 50,  // +% to that item's price per level (★4 = +150%)
+    levelBrewMinus: 15,  // % faster brewing per level (each level takes 15% off the time)
   },
 
   // --- Customers ---
@@ -158,6 +165,14 @@ var CONFIG = {
   //              floor  true = drawn flat on the floor, under everything (rugs)
   //              onWall true = hangs on the wall (may stick out of the floor area)
   //              area   (type 'expansion') which area this pad opens
+  //            type 'upgrade' builds nothing you can see; instead it improves:
+  //              machine   that machine goes up one level (★2, ★3, ★4; see "upgrades")
+  //              carryPlus the barista can hold this many more items
+  //              speedPlus the barista walks this many % faster
+  //              trayPlus  every machine keeps this many more items ready
+  //   requires can also be a list: ['latte', 'cappuccinoLv3'] = needs both.
+  //   Each area has ONE upgrade spot; its upgrades show up there one after
+  //   another (each one requires the previous one).
   pads: [
     // ===== The café =====
     { id: 'counter', name: 'Counter', price: 0, requires: null,
@@ -367,6 +382,102 @@ var CONFIG = {
     { id: 'records', name: 'Record Player', price: 16000, requires: 'piano',
       pad: { x: 39.2, y: 5.8, w: 2, h: 1.2 },
       builds: { type: 'records', x: 40.6, y: 4.3, w: 1.1, h: 1.0, solid: true, cozy: 10 } },
+
+    // ===== Upgrades: café machine levels (spot between the tables and the queue) =====
+    { id: 'espressoLv2', name: 'Espresso ★2', price: 60, requires: 'cappuccino',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'espresso1' } },
+    { id: 'espressoLv3', name: 'Espresso ★3', price: 150, requires: 'espressoLv2',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'espresso1' } },
+    { id: 'cappuccinoLv2', name: 'Cappuccino ★2', price: 180, requires: 'espressoLv3',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'cappuccino' } },
+    { id: 'espressoLv4', name: 'Espresso ★4', price: 400, requires: 'cappuccinoLv2',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'espresso1' } },
+    { id: 'cappuccinoLv3', name: 'Cappuccino ★3', price: 480, requires: 'espressoLv4',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'cappuccino' } },
+    { id: 'latteLv2', name: 'Latte ★2', price: 660, requires: ['cappuccinoLv3', 'latte'],
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'latte' } },
+    { id: 'cappuccinoLv4', name: 'Cappuccino ★4', price: 1200, requires: 'latteLv2',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'cappuccino' } },
+    { id: 'latteLv3', name: 'Latte ★3', price: 1760, requires: 'cappuccinoLv4',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'latte' } },
+    { id: 'mochaLv2', name: 'Mocha ★2', price: 1950, requires: ['latteLv3', 'mocha'],
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'mocha' } },
+    { id: 'icedLv2', name: 'Iced Coffee ★2', price: 3300, requires: ['mochaLv2', 'iced'],
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'iced' } },
+    { id: 'latteLv4', name: 'Latte ★4', price: 4400, requires: 'icedLv2',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'latte' } },
+    { id: 'mochaLv3', name: 'Mocha ★3', price: 5200, requires: 'latteLv4',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'mocha' } },
+    { id: 'icedLv3', name: 'Iced Coffee ★3', price: 8800, requires: 'mochaLv3',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'iced' } },
+    { id: 'mochaLv4', name: 'Mocha ★4', price: 13000, requires: 'icedLv3',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'mocha' } },
+    { id: 'icedLv4', name: 'Iced Coffee ★4', price: 22000, requires: 'mochaLv4',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'iced' } },
+
+    // ===== Upgrades: the barista (on the Fairy Lights spot, once the lights are up) =====
+    { id: 'shoes1', name: 'Quick Shoes', price: 600, requires: 'lights',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', speedPlus: 10 } },
+    { id: 'carry3', name: 'Carry 3 Items', price: 1500, requires: 'shoes1',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', carryPlus: 1 } },
+    { id: 'trays2', name: 'Bigger Trays', price: 2500, requires: 'carry3',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', trayPlus: 1 } },
+    { id: 'shoes2', name: 'Quicker Shoes', price: 4000, requires: 'trays2',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', speedPlus: 10 } },
+    { id: 'carry4', name: 'Carry 4 Items', price: 9000, requires: 'shoes2',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', carryPlus: 1 } },
+    { id: 'shoes3', name: 'Speedy Shoes', price: 15000, requires: 'carry4',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', speedPlus: 10 } },
+    { id: 'trays3', name: 'Huge Trays', price: 20000, requires: 'shoes3',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', trayPlus: 1 } },
+
+    // ===== Upgrades: bakery oven levels (spot between the bottom tables) =====
+    { id: 'croissantLv2', name: 'Croissant ★2', price: 1200, requires: ['oven1', 'btable1'],
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven1' } },
+    { id: 'croissantLv3', name: 'Croissant ★3', price: 3200, requires: 'croissantLv2',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven1' } },
+    { id: 'cupcakeLv2', name: 'Cupcake ★2', price: 3750, requires: ['croissantLv3', 'oven2'],
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven2' } },
+    { id: 'croissantLv4', name: 'Croissant ★4', price: 8000, requires: 'cupcakeLv2',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven1' } },
+    { id: 'cinnamonLv2', name: 'Cinnamon Roll ★2', price: 9600, requires: ['croissantLv4', 'oven3'],
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven3' } },
+    { id: 'cupcakeLv3', name: 'Cupcake ★3', price: 10000, requires: 'cinnamonLv2',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven2' } },
+    { id: 'cupcakeLv4', name: 'Cupcake ★4', price: 25000, requires: 'cupcakeLv3',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven2' } },
+    { id: 'cinnamonLv3', name: 'Cinnamon Roll ★3', price: 25600, requires: 'cupcakeLv4',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven3' } },
+    { id: 'cinnamonLv4', name: 'Cinnamon Roll ★4', price: 64000, requires: 'cinnamonLv3',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven3' } },
+
+    // ===== Upgrades: patio machine levels (spot between the parasol tables) =====
+    { id: 'lemonadeLv2', name: 'Lemonade ★2', price: 4500, requires: ['lemonade', 'ptable1'],
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'lemonade' } },
+    { id: 'lemonadeLv3', name: 'Lemonade ★3', price: 12000, requires: 'lemonadeLv2',
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'lemonade' } },
+    { id: 'frappeLv2', name: 'Frappé ★2', price: 14400, requires: ['lemonadeLv3', 'frappe'],
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'frappe' } },
+    { id: 'lemonadeLv4', name: 'Lemonade ★4', price: 30000, requires: 'frappeLv2',
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'lemonade' } },
+    { id: 'frappeLv3', name: 'Frappé ★3', price: 38400, requires: 'lemonadeLv4',
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'frappe' } },
+    { id: 'frappeLv4', name: 'Frappé ★4', price: 96000, requires: 'frappeLv3',
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'frappe' } },
+
+    // ===== Upgrades: lounge pot levels (spot under the first armchairs) =====
+    { id: 'hotchocLv2', name: 'Hot Chocolate ★2', price: 13500, requires: ['hotchoc', 'lchairs1'],
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'hotchoc' } },
+    { id: 'matchaLv2', name: 'Matcha ★2', price: 33000, requires: ['hotchocLv2', 'matcha'],
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'matcha' } },
+    { id: 'hotchocLv3', name: 'Hot Chocolate ★3', price: 36000, requires: 'matchaLv2',
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'hotchoc' } },
+    { id: 'matchaLv3', name: 'Matcha ★3', price: 88000, requires: 'hotchocLv3',
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'matcha' } },
+    { id: 'hotchocLv4', name: 'Hot Chocolate ★4', price: 90000, requires: 'matchaLv3',
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'hotchoc' } },
+    { id: 'matchaLv4', name: 'Matcha ★4', price: 220000, requires: 'hotchocLv4',
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'matcha' } },
   ],
 
   // --- Saving ---
@@ -409,6 +520,9 @@ var CONFIG = {
     pad: '#7ccf7a',        // buy pad you can afford
     padTooPricey: '#c9b9a3',// buy pad you can't afford yet
     padGold: '#f2c14e',    // expansion pad you can afford
+    padUpgrade: '#8cc4ec', // upgrade pad you can afford
+    upgradeText: '#3a78b0',// floating text when you buy a barista upgrade
+    levelStar: '#f2b93b',  // the little stars on a leveled-up machine
     padText: '#3b2a20',    // text on and above pads
     wood: '#a8754f',       // counters and tables
     woodLight: '#c79a72',  // top highlight on wood

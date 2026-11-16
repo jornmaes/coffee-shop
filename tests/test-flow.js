@@ -1,0 +1,245 @@
+// Plays the whole game with a simple bot and checks the rules hold every frame.
+// The bot "walks" by teleporting after waiting the time the walk would take.
+// seeded random so runs are repeatable
+var seed = Number(process.argv[3] || 1);
+var seededMath = Object.create(Math);
+seededMath.random = function () { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+var ctx = require('./load-game.js')(process.argv[2], { Math: seededMath });
+var C = ctx.CONFIG, PR = C.player.radius, CR = C.customers.radius;
+var fails = 0, passes = 0;
+var failed = {};
+function check(name, ok) { if (!ok) { if (!failed[name]) console.log('FAIL ' + name); failed[name] = 1; fails++; } else passes++; }
+var quiet = process.argv[4] === 'quiet';
+
+
+function freshState(cash) {
+  return { cash: cash, time: 0, bought: {}, builtAt: {}, machines: {}, carrying: [], stats: { served: 0 },
+    customers: [], nextCustomerId: 1, spawnTimer: 2, floaters: [], coins: [],
+    player: { x: C.player.startX, y: C.player.startY, radius: PR, faceX: 0, faceY: 1 } };
+}
+var s = freshState(C.start.cash);
+ctx.rebuildSolids(s);
+
+var bot = { busyUntil: 0, plan: null };
+function travelTime(x, y) {
+  var path = ctx.findPath(s.player.x, s.player.y, x, y);
+  if (!path) return 1e9;
+  var d = 0, from = s.player;
+  path.forEach(function (p) { d += Math.hypot(p.x - from.x, p.y - from.y); from = p; });
+  return d / ctx.getPlayerSpeed(s);
+}
+function go(x, y, what) { bot.busyUntil = s.time + travelTime(x, y); bot.plan = { x: x, y: y, what: what }; }
+function wantsSomethingIHave(c) { return c.orders.some(function (o) { return s.carrying.indexOf(o) !== -1; }); }
+
+function botThink() {
+  if (s.time < bot.busyUntil) return;
+  if (bot.plan) {
+    // arrive
+    if (bot.plan.what && bot.plan.what.customer) {
+      var c = bot.plan.what.customer;
+      s.player.x = c.x + 0.6; s.player.y = c.y; // stand next to them (they may have moved)
+    } else { s.player.x = bot.plan.x; s.player.y = bot.plan.y; }
+    bot.plan = null;
+    return;
+  }
+  // 1. deliver something I'm holding (nearest customer first)
+  var wanted = s.customers.filter(wantsSomethingIHave);
+  if (wanted.length) { go(wanted[0].x + 0.6, wanted[0].y, { customer: wanted[0] }); return; }
+  // 2. buy the cheapest affordable pad (real players buy as soon as they can)
+  var pads = ctx.getVisiblePads(s).filter(function (p) { return p.price <= s.cash; })
+    .sort(function (a, b) { return a.price - b.price; });
+  if (pads.length) {
+    // a pad that appeared under our feet needs a step off first (like a real player)
+    if (s.padsUnderFeet && s.padsUnderFeet[pads[0].id]) { go(C.player.startX, C.player.startY, null); return; }
+    go(pads[0].pad.x + pads[0].pad.w / 2, pads[0].pad.y + pads[0].pad.h / 2, null); return;
+  }
+  // 3. fetch an item someone ordered
+  if (s.carrying.length >= ctx.getCarryLimit(s)) return;
+  var orders = [];
+  s.customers.forEach(function (c) { c.orders.forEach(function (o) { orders.push(o); }); });
+  for (var i = 0; i < orders.length; i++) {
+    var item = orders[i];
+    if (ctx.countCarried(s, item) >= ctx.countWanted(s, item)) continue;
+    var m = ctx.getMachineFor(s, item);
+    if (ctx.getMachineState(s, m.id).ready > 0) { go(m.builds.x + m.builds.w / 2, m.builds.y + m.builds.h + PR + 0.05, null); return; }
+  }
+}
+
+var dt = 1 / 30, log = [], maxTime = 8 * 3600, firstServe = null, milestones = {};
+var maxCustomers = 0, vips = 0, combos = 0, seenIds = {};
+while (s.time < maxTime && ctx.getVisiblePads(s).length > 0) {
+  s.time += dt;
+  ctx.updateMachines(s, dt);
+  ctx.updateCustomers(s, dt);
+  botThink();
+  var bought = ctx.tryBuyPads(s);
+  if (bought) {
+    ctx.repathCustomers(s);
+    log.push(bought.id + '@' + (s.time / 60).toFixed(0));
+    if (bought.builds.type === 'expansion') milestones[bought.id] = s.time;
+  }
+  ctx.tryPickup(s);
+  var served = ctx.tryDeliver(s);
+  if (served && firstServe === null) firstServe = s.time;
+  ctx.updateFloaters(s);
+  ctx.updateCoins(s, dt);
+
+  // ---- rules that must hold every frame ----
+  var seatsNow = ctx.getSeats(s).length;
+  maxCustomers = Math.max(maxCustomers, s.customers.length);
+  var seated = s.customers.filter(function (c) { return c.seatKey; }).length;
+  if (seated > seatsNow) check('never more seat-holding customers than seats', false);
+  var claimed = {};
+  s.customers.forEach(function (c) {
+    if (!seenIds[c.id] && c.ordered.length) { seenIds[c.id] = 1; if (c.vip) vips++; if (c.ordered.length > 1) combos++; }
+    if (c.seatKey) { if (claimed[c.seatKey]) check('two customers on one seat', false); claimed[c.seatKey] = 1; }
+    if (c.step !== 'leaving' && !c.seatKey) check('customer without a seat before leaving', false);
+    c.orders.forEach(function (o) { if (C.menu[o] === undefined) check('ordered an item that does not exist', false); });
+    if (c.ordered.length > 2) check('orders are 1 or 2 items', false);
+    if (c.ordered.length === 2 && C.menu[c.ordered[0]].kind === C.menu[c.ordered[1]].kind) check('a 2-item order is one drink + one treat', false);
+  });
+  var q = ctx.getQueue(s).map(function (c) { return c.queueIndex; }).sort();
+  q.forEach(function (v, i) { if (v !== i) check('queue places are 0,1,2... (got ' + q.join(',') + ')', false); });
+  if (q.length > C.customers.maxQueue) check('queue never longer than maxQueue', false);
+  if (s.carrying.length > ctx.getCarryLimit(s)) check('never carry more than allowed', false);
+  if (s.cash < 0) check('cash never negative', false);
+  var holdsNow = ctx.getTrayHolds(s);
+  Object.keys(s.machines).forEach(function (id) { if (s.machines[id].ready > holdsNow) check('machine tray overfull', false); });
+}
+var minutes = (s.time / 60).toFixed(0);
+function at(id) { return milestones[id] ? (milestones[id] / 60).toFixed(0) + 'm' : 'never'; }
+if (!quiet) console.log('     build timeline (minutes): ' + log.join(' '));
+console.log('     seed ' + process.argv[3] + ': bakery ' + at('openBakery') + ', patio ' + at('openPatio') + ', lounge ' + at('openLounge') +
+  ', all ' + C.pads.length + ' pads ' + minutes + 'm | served ' + s.stats.served + ', first at ' + (firstServe || 0).toFixed(0) +
+  's, VIPs ' + vips + ', combos ' + combos + ', max customers ' + maxCustomers);
+check('every pad bought (no getting stuck)', ctx.getVisiblePads(s).length === 0);
+check('first customer served within 60s', firstServe !== null && firstServe < 60);
+check('café part takes 15-60 min (bakery opens at ' + at('openBakery') + ')', milestones.openBakery > 15 * 60 && milestones.openBakery < 60 * 60);
+// (Part 10 retunes the prices for ~10 h and tightens this to 8-12 h)
+check('whole build takes 1.5-12 hours for the bot (got ' + minutes + 'm)', s.time > 90 * 60 && s.time < 720 * 60);
+check('some VIPs and combos happened', vips > 0 && combos > 0);
+
+// ---- specific rules, tested directly ----
+function fresh() { var t = freshState(0); t.bought = { counter: true, espresso1: true, table1: true }; t.spawnTimer = 0; t.player = { x: 32, y: 22, radius: PR }; return t; }
+
+// no tables -> no customers
+var t = fresh(); t.bought = { counter: true, espresso1: true }; ctx.rebuildSolids(t);
+for (var k = 0; k < 600; k++) { t.time += 0.05; ctx.updateCustomers(t, 0.05); }
+check('no seats: no customers come in', t.customers.length === 0);
+// no machine -> no customers
+t = fresh(); t.bought = { counter: true, table1: true }; ctx.rebuildSolids(t);
+for (k = 0; k < 600; k++) { t.time += 0.05; ctx.updateCustomers(t, 0.05); }
+check('no machine: no customers come in', t.customers.length === 0);
+// all seats taken -> nobody else enters
+t = fresh(); ctx.rebuildSolids(t);
+for (k = 0; k < 2400; k++) { t.time += 0.05; ctx.updateMachines(t, 0.05); ctx.updateCustomers(t, 0.05); }
+check('2 seats: exactly 2 customers come in and wait (got ' + t.customers.length + ')', t.customers.length === 2);
+check('both are seated and waiting', t.customers.every(function (c) { return c.step === 'waiting'; }));
+check('they ordered espresso only (only item available, no combos)', t.customers.every(function (c) { return c.orders.join() === 'espresso'; }));
+// wrong item is not handed over
+var w = t.customers[0]; w.vip = false;
+t.player.x = w.x + 0.6; t.player.y = w.y; t.carrying = ['latte'];
+check('wrong item: nothing happens', ctx.tryDeliver(t) === null && t.carrying.length === 1 && !w.served && t.cash === 0);
+// pickup only what's wanted
+t.carrying = [];
+var esp = ctx.getPad('espresso1');
+t.player.x = esp.builds.x + 0.75; t.player.y = esp.builds.y + esp.builds.h + PR;
+t.machines.espresso1.ready = 1;
+check('pickup wanted item', ctx.tryPickup(t) === 'espresso' && t.machines.espresso1.ready === 0);
+t.machines.espresso1.ready = 1;
+check('pickup second (2 wanted)', ctx.tryPickup(t) === 'espresso');
+t.machines.espresso1.ready = 1;
+check('no pickup beyond what is wanted / carry limit', ctx.tryPickup(t) === null && t.machines.espresso1.ready === 1);
+// right item: paid, coins, drinking
+t.player.x = w.x + 0.6; t.player.y = w.y;
+var cash0 = t.cash;
+check('right item is handed over', ctx.tryDeliver(t) === w);
+check('customer pays the price', t.cash - cash0 === C.menu.espresso.price);
+check('customer starts drinking', w.step === 'drinking' && w.served);
+check('coin burst created', t.coins.length >= 3);
+check('served count went up', t.stats.served === 1);
+// cozy bonus and VIP
+t.bought.flowers = true; t.bought.bookshelf = true;
+check('cozy bonus raises the price', ctx.getItemPayment(t, 'espresso', false) === Math.round(C.menu.espresso.price * 1.15));
+check('VIPs pay more', ctx.getItemPayment(t, 'latte', true) === Math.round(C.menu.latte.price * 1.15 * C.customers.vipPayMultiplier));
+delete t.bought.flowers; delete t.bought.bookshelf;
+// drinking -> leaving -> gone, seat freed
+for (k = 0; k < 800; k++) { t.time += 0.05; ctx.updateMachines(t, 0.05); ctx.updateCustomers(t, 0.05); ctx.updateCoins(t, 0.05); }
+check('served customer left and a new one took the seat', t.customers.indexOf(w) === -1 && t.customers.length === 2);
+check('coins finished flying', t.coins.length === 0);
+
+// combo order: each item is paid when handed over; served after the last one
+var u = fresh(); u.bought.openBakery = true; u.bought.iced = true; u.bought.oven1 = true; ctx.rebuildSolids(u);
+var cu = { id: 99, x: 30, y: 21, radius: CR, step: 'waiting', seatKey: 'table1:L', vip: false,
+  ordered: ['espresso', 'croissant'], orders: ['espresso', 'croissant'], served: false, timer: 0, path: [], target: null, faceX: 1, faceY: 0 };
+u.customers = [cu];
+u.player.x = 30.6; u.player.y = 21; u.carrying = ['croissant'];
+var cash1 = u.cash;
+check('combo: first item handed over and paid', ctx.tryDeliver(u) === cu && u.cash - cash1 === C.menu.croissant.price && !cu.served && cu.orders.join() === 'espresso');
+check('combo: still waiting for the drink', cu.step === 'waiting' && u.stats.served === 0);
+u.carrying = ['espresso'];
+check('combo: second item completes the order', ctx.tryDeliver(u) === cu && cu.served && cu.step === 'drinking' && u.stats.served === 1);
+// pickOrder makes combos once treats exist, never two of a kind
+var kinds = {}, n2 = 0;
+for (k = 0; k < 400; k++) { var o = ctx.pickOrder(u); if (o.length === 2) { n2++; kinds[C.menu[o[0]].kind + '+' + C.menu[o[1]].kind] = 1; } }
+check('combos happen roughly comboChance of the time (' + n2 + '/400)', n2 > 400 * C.customers.comboChance * 0.6 && n2 < 400 * C.customers.comboChance * 1.4);
+check('combos are always drink + treat', Object.keys(kinds).join() === 'drink+treat');
+// opening an area removes the wall between
+var v = fresh(); ctx.rebuildSolids(v);
+var gap = C.areas[1].openings[0];
+check('bakery door is a wall before opening', ctx.isBlocked(gap.x + gap.w / 2, gap.y + gap.h / 2, 0.2));
+v.bought.openBakery = true; ctx.rebuildSolids(v);
+check('bakery door is open after buying it', !ctx.isBlocked(gap.x + gap.w / 2, gap.y + gap.h / 2, 0.2));
+check('bakery walls appear once open', ctx.isBlocked(5.8, 18, 0.1));
+
+// ---- upgrades ----
+var up = fresh(); ctx.rebuildSolids(up);
+var espPad = ctx.getPad('espresso1'), lvl = C.upgrades;
+check('a new machine is level 1', ctx.getMachineLevel(up, 'espresso1') === 1);
+up.bought.espressoLv2 = true; up.bought.espressoLv3 = true;
+check('two level-ups make it level 3', ctx.getMachineLevel(up, 'espresso1') === 3);
+check('levels raise the price', Math.abs(ctx.getItemPrice(up, 'espresso') - C.menu.espresso.price * (1 + 2 * lvl.levelPricePlus / 100)) < 1e-9);
+check('levels raise the payment', ctx.getItemPayment(up, 'espresso', false) === Math.round(C.menu.espresso.price * (1 + 2 * lvl.levelPricePlus / 100)));
+check('levels make brewing faster', Math.abs(ctx.getBrewSeconds(up, espPad) - C.menu.espresso.brewSeconds * Math.pow(1 - lvl.levelBrewMinus / 100, 2)) < 1e-9);
+check('other machines keep their level', ctx.getMachineLevel(up, 'cappuccino') === 1);
+// a level-3 machine really brews faster in the game loop
+up.machines.espresso1 = { ready: 0, timer: 0 };
+ctx.updateMachines(up, ctx.getBrewSeconds(up, espPad) + 0.001);
+check('updateMachines uses the faster brew time', up.machines.espresso1.ready === 1);
+// barista upgrades
+check('base carry / speed / trays', ctx.getCarryLimit(up) === C.player.carry && ctx.getPlayerSpeed(up) === C.player.speed && ctx.getTrayHolds(up) === C.machine.holds);
+up.bought.carry3 = true; up.bought.shoes1 = true; up.bought.trays2 = true;
+check('carry upgrade: one more item', ctx.getCarryLimit(up) === C.player.carry + 1);
+check('shoes: walk 10% faster', Math.abs(ctx.getPlayerSpeed(up) - C.player.speed * 1.1) < 1e-9);
+check('bigger trays: one more ready', ctx.getTrayHolds(up) === C.machine.holds + 1);
+up.machines.espresso1 = { ready: 0, timer: 0 };
+for (k = 0; k < 400; k++) ctx.updateMachines(up, 0.1);
+check('machine fills the bigger tray, then stops', up.machines.espresso1.ready === C.machine.holds + 1);
+// carrying 3 with the upgrade
+up.customers = [];
+for (k = 0; k < 3; k++) up.customers.push({ id: 50 + k, x: 30, y: 21, radius: CR, step: 'waiting', seatKey: 'x' + k, vip: false,
+  ordered: ['espresso'], orders: ['espresso'], served: false, timer: 0, path: [], target: null });
+up.carrying = []; up.machines.espresso1.ready = 3;
+up.player.x = espPad.builds.x + 0.75; up.player.y = espPad.builds.y + espPad.builds.h + PR;
+var picked = 0; for (k = 0; k < 5; k++) if (ctx.tryPickup(up)) picked++;
+check('carry upgrade: picks up 3 (got ' + picked + ')', picked === 3);
+// requires lists: a level-up only shows once its machine AND the previous upgrade are bought
+var rq = fresh(); rq.bought.cappuccino = true; rq.bought.espressoLv2 = true; rq.bought.espressoLv3 = true;
+rq.bought.cappuccinoLv2 = true; rq.bought.espressoLv4 = true; rq.bought.cappuccinoLv3 = true;
+var latteUp = ctx.getPad('latteLv2');
+check('Latte ★2 hidden without the latte machine', !ctx.isPadVisible(rq, latteUp));
+rq.bought.latte = true;
+check('Latte ★2 shows once the latte machine is built', ctx.isPadVisible(rq, latteUp));
+
+// one step on an upgrade spot buys ONE upgrade, even when the next one appears under your feet
+var ch = fresh(); ch.bought.cappuccino = true; ch.cash = 1e6; ctx.rebuildSolids(ch);
+var spot = ctx.getPad('espressoLv2').pad;
+ch.player.x = spot.x + spot.w / 2; ch.player.y = spot.y + spot.h / 2;
+for (k = 0; k < 10; k++) ctx.tryBuyPads(ch);
+check('one step buys one upgrade, not the whole chain', ch.bought.espressoLv2 && !ch.bought.espressoLv3);
+ch.player.y += 3; ctx.tryBuyPads(ch); // step off...
+ch.player.y -= 3;                     // ...and back on
+check('stepping off and on again buys the next one', ctx.tryBuyPads(ch) && ch.bought.espressoLv3 && !ch.bought.cappuccinoLv2);
+
+console.log(passes + ' flow checks passed, ' + fails + ' failed');
+process.exit(fails ? 1 : 0);

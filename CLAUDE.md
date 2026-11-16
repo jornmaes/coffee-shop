@@ -35,6 +35,14 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
 - **What you buy:** machines unlock new, pricier menu items; tables add seats
   (more customers at once); **decorations** add a **cozy bonus** (+% on every
   payment).
+- **Upgrades** are blue pads. Each area has one upgrade spot where its
+  upgrades appear one after another:
+  - **Machine levels** (★2, ★3, ★4): the item costs more and brews faster;
+    stars show on the machine.
+  - **Barista upgrades** (café): carry more items, walk faster, bigger
+    machine trays (machines keep more items ready).
+  - A pad that appears under the barista's feet waits until they step off
+    it once, so one step never buys a whole chain of upgrades.
 - **Areas:** the shop grows into new areas, each with its own look, menu,
   furniture and decorations. A locked area shows as an outline with a sign
   on the grass, so you always see what's coming. A big **golden pad** inside
@@ -147,6 +155,9 @@ size, starting cash, effects.
   - `render.js`: the camera and drawing each frame in the right order
   - `input.js`: joystick and keyboard
   - `game.js`: game state, the main loop, HUD, hints, celebrations, settings panel
+  - `tests/`: Node logic tests (not loaded by the game): `run-all.js` runs
+    them all; `load-game.js` loads the logic files; layout, save, collision
+    and a bot that plays the whole build order (`test-flow.js`)
 - Use a `requestAnimationFrame` loop and compute everything from elapsed time
   (`dt`), not frame count, so it stays correct when the tab sleeps.
 
@@ -156,10 +167,11 @@ After **each part** of the roadmap:
 
 1. **Test** it:
    - Run `node --check <file>.js` on changed JS files to catch syntax errors.
-   - Run logic tests in Node when logic changed: load the game's logic files
-     (no browser needed; join them into one function rather than a `vm`
-     sandbox, which is many times slower) and check the rules, layout and a
-     bot that plays the whole build order (no getting stuck, sensible pacing).
+   - Run logic tests in Node when logic changed: `node tests/run-all.js`.
+     They load the game's logic files (no browser needed; joined into one
+     function rather than a `vm` sandbox, which is many times slower) and
+     check the rules, layout and a bot that plays the whole build order (no
+     getting stuck, sensible pacing). Add checks there for new rules.
    - Open `index.html` in a browser in responsive mode, landscape (e.g. 844×390).
      Turn on touch emulation to try the joystick.
    - Switch to portrait (390×844) and check the rotate overlay appears.
@@ -189,13 +201,19 @@ Don't start the next part until the current one works and is committed.
       seats and decor; treats and combo orders; VIP customers; celebrations
       (confetti, banners, camera visit); longer pacing; pad labels always on
       top; settings panel with reset progress.
-- [ ] **Part 8 — Helpers & upgrades:** hire a helper barista who delivers drinks
-      on their own (the idle part); upgrades like faster machines, bigger trays,
-      carrying more drinks, walking faster.
-- [ ] **Part 9 — Offline earnings:** helpers keep serving while you're away; a
+- [x] **Part 8 — Upgrades & machine levels:** blue upgrade pads, one spot per
+      area: machine levels ★2–★4 (higher price, faster brewing), barista
+      upgrades (carry more, walk faster, bigger trays). Logic tests moved into
+      `tests/`.
+- [ ] **Part 9 — Helpers:** hire a helper barista per area who picks up and
+      delivers orders on their own (the idle part); helper upgrades.
+- [ ] **Part 10 — Pacing to ~10 h:** rebalance prices so a fast bot needs
+      about 10 hours (test allows 8–12 h), with never more than ~10 minutes
+      between purchases.
+- [ ] **Part 11 — Offline earnings:** helpers keep serving while you're away; a
       cozy "Welcome back, you earned X" popup (capped by a config value).
-- [ ] **Part 10 — Polish:** gentle animations, optional sound with a mute
+- [ ] **Part 12 — Polish:** gentle animations, optional sound with a mute
       toggle, more settings. (Number formatting and reset-with-confirmation
       came early, in Part 7.)
-- [ ] **Part 11 — Phone install:** web app manifest (landscape orientation,
+- [ ] **Part 13 — Phone install:** web app manifest (landscape orientation,
       fullscreen) and icon so it can be added to the home screen.
