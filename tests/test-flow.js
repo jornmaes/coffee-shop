@@ -66,7 +66,8 @@ function botThink() {
   }
 }
 
-var dt = 1 / 30, log = [], maxTime = 8 * 3600, firstServe = null, milestones = {};
+var dt = 1 / 30, log = [], maxTime = 14 * 3600, firstServe = null, milestones = {};
+var lastBuyAt = 0, maxGap = 0, maxGapPad = '';
 var maxCustomers = 0, vips = 0, combos = 0, seenIds = {};
 while (s.time < maxTime && ctx.getVisiblePads(s).length > 0) {
   s.time += dt;
@@ -78,6 +79,9 @@ while (s.time < maxTime && ctx.getVisiblePads(s).length > 0) {
   if (bought) {
     ctx.repathCustomers(s);
     log.push(bought.id + '@' + (s.time / 60).toFixed(0));
+    // the longest wait between two purchases ("always a next pad within a few minutes")
+    if (s.time - lastBuyAt > maxGap) { maxGap = s.time - lastBuyAt; maxGapPad = bought.id; }
+    lastBuyAt = s.time;
     if (bought.builds.type === 'expansion') milestones[bought.id] = s.time;
   }
   ctx.tryPickup(s);
@@ -122,13 +126,13 @@ var helperShare = Math.round(100 * (s.stats.helperEarned || 0) / Math.max(1, tot
 function at(id) { return milestones[id] ? (milestones[id] / 60).toFixed(0) + 'm' : 'never'; }
 if (!quiet) console.log('     build timeline (minutes): ' + log.join(' '));
 console.log('     seed ' + process.argv[3] + ': bakery ' + at('openBakery') + ', patio ' + at('openPatio') + ', lounge ' + at('openLounge') +
-  ', all ' + C.pads.length + ' pads ' + minutes + 'm | helpers earned ' + helperShare + '% | served ' + s.stats.served + ', first at ' + (firstServe || 0).toFixed(0) +
+  ', all ' + C.pads.length + ' pads ' + minutes + 'm, longest wait ' + (maxGap / 60).toFixed(1) + 'm | helpers earned ' + helperShare + '% | served ' + s.stats.served + ', first at ' + (firstServe || 0).toFixed(0) +
   's, VIPs ' + vips + ', combos ' + combos + ', max customers ' + maxCustomers);
 check('every pad bought (no getting stuck)', ctx.getVisiblePads(s).length === 0);
 check('first customer served within 60s', firstServe !== null && firstServe < 60);
-check('café part takes 15-60 min (bakery opens at ' + at('openBakery') + ')', milestones.openBakery > 15 * 60 && milestones.openBakery < 60 * 60);
-// (Part 10 retunes the prices for ~10 h and tightens this to 8-12 h)
-check('whole build takes 1.5-12 hours for the bot (got ' + minutes + 'm)', s.time > 90 * 60 && s.time < 720 * 60);
+check('café part takes 30-90 min (bakery opens at ' + at('openBakery') + ')', milestones.openBakery > 30 * 60 && milestones.openBakery < 90 * 60);
+check('whole build takes 8-12 hours for the bot (got ' + minutes + 'm)', s.time > 480 * 60 && s.time < 720 * 60);
+check('never more than 10 min between purchases (longest ' + (maxGap / 60).toFixed(1) + 'm, before ' + maxGapPad + ')', maxGap <= 10 * 60);
 check('some VIPs and combos happened', vips > 0 && combos > 0);
 check('helpers earned part of the money (' + helperShare + '%)', helperShare > 3);
 

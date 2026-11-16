@@ -67,9 +67,16 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
     record player, big soft rug.
 - **Celebrations keep it exciting:** "new on the menu" and "area complete"
   banners, confetti, golden pads with sparkles.
-- **Pacing:** the whole shop is a multi-hour project (a fast bot needs about
-  3.5 hours; the test allows 1.5–5 h). There's always a next pad within a few
-  minutes, with an area opening as the bigger goal.
+- **Pacing:** the whole shop is a long project: a fast bot needs about
+  9.7 hours (the test allows 8–12 h; a real player takes longer, spread over
+  many short sessions). The café takes about 75 minutes, the patio opens
+  around 4.5 h and the lounge around 7 h. There's always a next pad within
+  a few minutes (the test allows at most 10 minutes between purchases),
+  with an area opening as the bigger goal. Helpers earn a big share of the
+  money later on, so coming back always pays off.
+  - Prices after the café were fitted with the bot so purchases come at an
+    even pace (about every 8 minutes). When changing prices, run the tests
+    and keep the longest wait under 10 minutes.
 - **No fail states.** Nothing is ever lost: customers wait patiently forever and
   never leave angry, wrong drinks do nothing, money never goes negative.
   The worst case is "progress is slower".
@@ -221,9 +228,9 @@ Don't start the next part until the current one works and is committed.
       who fetches and delivers orders on their own; helper shoes; earnings
       by helpers in the stats. Also: hold-to-buy ring on pads, and
       `index.html?cheat` money buttons for testing.
-- [ ] **Part 10 — Pacing to ~10 h:** rebalance prices so a fast bot needs
-      about 10 hours (test allows 8–12 h), with never more than ~10 minutes
-      between purchases.
+- [x] **Part 10 — Pacing to ~10 h:** prices refitted so a fast bot needs
+      about 9.7 hours (test allows 8–12 h), never more than 10 minutes
+      between purchases; helpers cost much more and walk slower.
 - [ ] **Part 11 — Offline earnings:** helpers keep serving while you're away; a
       cozy "Welcome back, you earned X" popup (capped by a config value).
 - [ ] **Part 12 — Polish:** gentle animations, optional sound with a mute
