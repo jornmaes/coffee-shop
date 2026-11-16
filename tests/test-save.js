@@ -23,7 +23,7 @@ function load(obj) {
 // --- round trip ---
 var a = fresh();
 a.cash = 321.5; a.bought = { counter: true, espresso1: true, table1: true };
-a.machines = { espresso1: { ready: 1, timer: 0 } }; a.carrying = ['espresso']; a.stats.served = 7;
+a.machines = { espresso1: { ready: 0, timer: 0 } }; a.carrying = ['espresso']; a.stats.served = 7;
 a.player.x = 20; a.player.y = 11;
 a.customers.push({ id: 1 }); a.floaters.push({}); a.coins.push({});
 check('saveGame returns true', ctx.saveGame(a) === true);
@@ -33,8 +33,7 @@ check('customers/effects not saved', !('customers' in saved) && !('floaters' in 
 var b = fresh(); ctx.rebuildSolids(b); ctx.loadGame(b);
 check('cash restored', b.cash === 321.5);
 check('bought restored', b.bought.counter && b.bought.espresso1 && b.bought.table1 && !b.bought.table2);
-check('machine restored', b.machines.espresso1.ready === 1);
-check('carrying restored', b.carrying.length === 1 && b.carrying[0] === 'espresso');
+check('carried item goes back on its tray, hands empty', b.machines.espresso1.ready === 1 && b.carrying.length === 0);
 check('served count restored', b.stats.served === 7);
 check('player position restored', b.player.x === 20 && b.player.y === 11);
 check('loaded items are solid', ctx.solidRects.length === ctx.wallRects.length + 3);
@@ -74,8 +73,10 @@ var mach = load({ bought: { counter: true, espresso1: true }, machines: {
   espresso1: { ready: 99, timer: 1e9 }, latte: { ready: 1, timer: 0 }, counter: { ready: 1 } } });
 check('machine values clamped', mach.s.machines.espresso1.ready === C.machine.holds && mach.s.machines.espresso1.timer === C.menu.espresso.brewSeconds);
 check('unbought machine / non-machine ignored', !('latte' in mach.s.machines) && !('counter' in mach.s.machines));
-var carry = load({ carrying: ['latte', 'poison', 42, 'espresso', 'mocha'] });
-check('carrying: only real drinks, max carry', carry.s.carrying.join() === 'latte,espresso');
+var carry = load({ bought: { counter: true, espresso1: true }, machines: { espresso1: { ready: 0, timer: 0 } },
+  carrying: ['latte', 'poison', 42, 'espresso', 'espresso', 'espresso', 'espresso'] });
+check('carrying: real items back on their own tray, never over full', carry.s.carrying.length === 0 &&
+  carry.s.machines.espresso1.ready === C.machine.holds && !('latte' in carry.s.machines));
 var counter = ctx.getPad('counter').builds;
 var inWall = load({ saveVersion: 3, bought: { counter: true }, player: { x: counter.x + 1, y: counter.y + 0.5 } });
 check('player inside an item -> start position', inWall.s.player.x === C.player.startX);

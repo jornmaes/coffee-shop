@@ -28,7 +28,9 @@ function noteFreq(n) {
 // Start the audio engine (call from a touch or key press).
 function startAudio() {
   if (audio.ctx) {
-    if (audio.ctx.state === 'suspended') audio.ctx.resume();
+    // wake it up if it was paused ('suspended'), or stopped by the phone
+    // itself, e.g. after a call or locking an iPhone ('interrupted')
+    if (audio.ctx.state !== 'running') audio.ctx.resume();
     return;
   }
   var AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -203,6 +205,9 @@ function scheduleMusic() {
   if (!c || c.state !== 'running') return;
   if (!state.settings.music) { audio.nextBeat = c.currentTime + 0.3; return; }
   var beatLen = 60 / CONFIG.sound.musicBpm;
+  // fell behind (the phone was busy)? skip the missed beats instead of
+  // playing them all at once
+  if (audio.nextBeat < c.currentTime) audio.nextBeat = c.currentTime + 0.05;
   while (audio.nextBeat < c.currentTime + 0.6) {
     playMusicBeat(audio.beat, audio.nextBeat, beatLen);
     audio.nextBeat += beatLen;

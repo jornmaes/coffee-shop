@@ -65,6 +65,10 @@ canvas.addEventListener('pointermove', onPointerMove);
 canvas.addEventListener('pointerup', onPointerUp);
 canvas.addEventListener('pointercancel', onPointerUp);
 
+// iPhones ignore "no zooming" in index.html, so stop pinch-zoom here
+// (these 'gesture' events only exist on iPhone and iPad).
+document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+
 // ---------- Keyboard (for testing on a computer) ----------
 
 // Map each key to a direction name

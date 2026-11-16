@@ -129,7 +129,9 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   something is built, and walking customers re-plan their route.
 - **Save progress in `localStorage`.**
   - One save key (`coffeeShopSave`), stored as JSON: cash, bought pads, machine
-    trays and timers, items being carried, stats, player position, last-seen time.
+    trays and timers, items being carried (on load they go back on their
+    machine's tray, since the customers who wanted them aren't saved), stats,
+    player position, last-seen time.
   - Save version 3 = the bigger map of Part 7. Older saves keep everything
     except the player position (the café moved), so the barista starts at the door.
   - Customers are **not** saved; a reloaded café starts empty and fills up again.

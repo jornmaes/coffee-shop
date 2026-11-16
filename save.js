@@ -96,11 +96,18 @@ function loadGame(state) {
     });
   }
 
-  // items in the barista's hands (only real menu items, never more than they can carry)
+  // items that were in the barista's hands go back on their machine's tray
+  // (if there's room). The customers who wanted them aren't saved, so
+  // holding them would only block the barista's hands after a reload.
+  state.carrying = [];
   if (Array.isArray(data.carrying)) {
-    state.carrying = data.carrying.filter(function (d) {
-      return typeof d === 'string' && CONFIG.menu.hasOwnProperty(d);
-    }).slice(0, getCarryLimit(state));
+    data.carrying.forEach(function (d) {
+      if (typeof d !== 'string' || !CONFIG.menu.hasOwnProperty(d)) return;
+      var machine = getMachineFor(state, d);
+      if (!machine) return;
+      var ms = getMachineState(state, machine.id);
+      ms.ready = Math.min(getTrayHolds(state), ms.ready + 1);
+    });
   }
 
   // stats
