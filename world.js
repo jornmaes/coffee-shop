@@ -20,13 +20,17 @@ function getWallRects() {
   ];
 }
 
+// Just the walls (never change). render.js draws these.
+var wallRects = getWallRects();
+
 // All solid rectangles the player can't walk through: the walls plus
 // every solid item that has been built. Rebuilt whenever something is bought.
-var solidRects = getWallRects();
+// (Only for collision; items are drawn by drawBuiltItems, not as walls.)
+var solidRects = wallRects.slice();
 
 // Recalculate solidRects from the walls and the bought items.
 function rebuildSolids(state) {
-  solidRects = getWallRects();
+  solidRects = wallRects.slice(); // .slice() makes a copy, so wallRects stays walls-only
   for (var i = 0; i < CONFIG.pads.length; i++) {
     var pad = CONFIG.pads[i];
     var b = pad.builds;

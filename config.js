@@ -67,7 +67,7 @@ var CONFIG = {
     {
       id: 'espresso1', name: 'Espresso Machine', price: 25, requires: 'counter',
       pad:    { x: 8.5,  y: 8,    w: 2,   h: 1.2 },
-      builds: { type: 'espresso', x: 13, y: 5.8, w: 1.6, h: 1.2, solid: true,
+      builds: { type: 'espresso', x: 13, y: 4.1, w: 1.6, h: 1.2, solid: true,
                 brew: { coins: 3, seconds: 2 } },
     },
     {
@@ -78,7 +78,7 @@ var CONFIG = {
     {
       id: 'espresso2', name: 'Espresso Machine 2', price: 100, requires: 'espresso1',
       pad:    { x: 8.5,  y: 5.8,  w: 2,   h: 1.2 },
-      builds: { type: 'espresso', x: 15.2, y: 5.8, w: 1.6, h: 1.2, solid: true,
+      builds: { type: 'espresso', x: 15.2, y: 4.1, w: 1.6, h: 1.2, solid: true,
                 brew: { coins: 4, seconds: 2 } },
     },
   ],

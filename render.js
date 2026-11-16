@@ -87,10 +87,11 @@ function drawCheckerboard(x, y, width, height, colorA, colorB) {
 }
 
 // Draw the shop walls. The rectangles come from world.js, so what you
-// see is exactly what you bump into.
+// see is exactly what you bump into. (wallRects, not solidRects: solidRects
+// also holds bought items, which would show up as brown squares.)
 function drawWalls() {
-  for (var i = 0; i < solidRects.length; i++) {
-    var r = solidRects[i];
+  for (var i = 0; i < wallRects.length; i++) {
+    var r = wallRects[i];
     fillWorldRect(r.x, r.y, r.w, r.h, CONFIG.colors.wall);
   }
 }
@@ -183,6 +184,9 @@ function popScale(state, padId) {
   return Math.max(0, scale);
 }
 
+// How round the corners of built items are, in tiles.
+var ITEM_CORNER = 0.3;
+
 // Draw one built item. (x, y, w, h) is its box in screen pixels.
 function drawItemShape(type, x, y, w, h) {
   var col = CONFIG.colors;
@@ -191,16 +195,20 @@ function drawItemShape(type, x, y, w, h) {
   if (type === 'counter') {
     // wooden counter: darker front, lighter top
     ctx.fillStyle = col.wood;
-    roundRectPath(x, y, w, h, u * 0.15);
+    roundRectPath(x, y, w, h, u * ITEM_CORNER);
     ctx.fill();
+    // the lighter top band is clipped to the counter's rounded shape,
+    // so it follows the rounded corners instead of poking out
+    ctx.save();
+    ctx.clip();
     ctx.fillStyle = col.woodLight;
-    roundRectPath(x, y, w, h * 0.55, u * 0.15);
-    ctx.fill();
+    ctx.fillRect(x, y, w, h * 0.55);
+    ctx.restore();
 
   } else if (type === 'espresso') {
     // metal machine with a dark panel, a red light and a little cup
     ctx.fillStyle = col.metal;
-    roundRectPath(x, y, w, h, u * 0.15);
+    roundRectPath(x, y, w, h, u * ITEM_CORNER);
     ctx.fill();
     ctx.fillStyle = col.metalDark;
     roundRectPath(x + w * 0.12, y + h * 0.12, w * 0.76, h * 0.38, u * 0.08);
@@ -254,7 +262,7 @@ function drawBuiltItems(state) {
     ctx.save();
     // soft shadow underneath
     ctx.fillStyle = CONFIG.colors.shadow;
-    roundRectPath(center.x - w / 2 + camera.scale * 0.08, center.y - h / 2 + camera.scale * 0.12, w, h, camera.scale * 0.15);
+    roundRectPath(center.x - w / 2 + camera.scale * 0.08, center.y - h / 2 + camera.scale * 0.12, w, h, camera.scale * ITEM_CORNER);
     ctx.fill();
     drawItemShape(b.type, center.x - w / 2, center.y - h / 2, w, h);
     ctx.restore();
@@ -299,7 +307,7 @@ function drawRegister(state) {
   var bc = worldToScreen(reg.box.x + reg.box.w / 2, reg.box.y + reg.box.h / 2);
   var bw = reg.box.w * u * scale, bh = reg.box.h * u * scale;
   ctx.fillStyle = '#4a3a30';
-  roundRectPath(bc.x - bw / 2, bc.y - bh / 2, bw, bh, u * 0.12);
+  roundRectPath(bc.x - bw / 2, bc.y - bh / 2, bw, bh, u * 0.2);
   ctx.fill();
   ctx.fillStyle = '#9fd6a0'; // little green display
   roundRectPath(bc.x - bw * 0.35, bc.y - bh * 0.35, bw * 0.7, bh * 0.3, u * 0.05);
