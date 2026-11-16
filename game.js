@@ -1,17 +1,24 @@
 // =============================================================
-// game.js — game state and the main loop.
+// game.js — game state, the main loop and the HUD.
 // =============================================================
 
 // Everything that describes "where the game is right now".
 var state = {
   cash: CONFIG.start.cash,  // coins the player has
-  register: 0,              // coins waiting in the register to be collected
-  brewTimers: {},           // per machine: seconds since its last brew
-  time: 0,                // seconds since the game was opened (drives animations)
+  time: 0,                  // seconds since the game was opened (drives animations)
 
   bought: {},               // which pads are bought, e.g. { counter: true }
   builtAt: {},              // when each item was bought this session (for the pop-in)
-  floaters: [],             // floating "-25" texts currently on screen
+  machines: {},             // per machine: { ready: drinks on the tray, timer: seconds brewed }
+  carrying: [],             // drink ids the barista is holding, e.g. ['latte']
+  stats: { served: 0 },     // how many customers have been served (ever)
+
+  customers: [],            // customers in the shop right now (not saved)
+  nextCustomerId: 1,
+  spawnTimer: 2,            // seconds until the next customer may come in
+
+  floaters: [],             // floating texts ("-25", "+8", "♥")
+  coins: [],                // coins flying from customers to the cash display
 
   // the barista you walk around with
   player: {
@@ -25,16 +32,59 @@ var state = {
   },
 };
 
-// HUD elements we update every frame
+// HUD elements
+var moneyEl = document.getElementById('money');
 var cashEl = document.getElementById('cash');
-var incomeEl = document.getElementById('income');
+var cozyEl = document.getElementById('cozy');
+var hintEl = document.getElementById('hint');
 
-// Show the current cash and income in the HUD.
-function updateHud() {
-  cashEl.textContent = '☕ ' + Math.floor(state.cash);
-  // show whole numbers as "3", others with one decimal, like "3.5"
-  var income = getIncomePerSecond(state);
-  incomeEl.textContent = '+' + (Math.round(income * 10) / 10) + '/s';
+// Show cash, cozy bonus and the current hint in the HUD.
+// We only touch the page when something changed (cheaper on phones).
+var lastHud = {};
+function updateHud(coinsArrived) {
+  var cashText = '☕ ' + Math.floor(state.cash);
+  if (cashText !== lastHud.cash) { cashEl.textContent = cashText; lastHud.cash = cashText; }
+
+  var cozy = getCozyBonus(state);
+  var cozyText = cozy > 0 ? '♥ Cozy +' + cozy + '%' : '';
+  if (cozyText !== lastHud.cozy) { cozyEl.textContent = cozyText; lastHud.cozy = cozyText; }
+
+  var hint = getHint(state);
+  if (hint !== lastHud.hint) {
+    hintEl.textContent = hint;
+    hintEl.classList.toggle('show', hint !== '');
+    lastHud.hint = hint;
+  }
+
+  // a little bump on the cash display when coins land in it
+  if (coinsArrived > 0) {
+    moneyEl.classList.remove('bump');
+    void moneyEl.offsetWidth; // forces the browser to restart the animation
+    moneyEl.classList.add('bump');
+  }
+}
+
+// A short "what to do next" tip for new players. Disappears after
+// serving a few customers (CONFIG.hints.untilServed).
+function getHint(state) {
+  if (state.stats.served >= CONFIG.hints.untilServed) return '';
+  if (!state.bought.counter) return 'Walk onto the glowing pad to build your counter';
+  if (getBuiltMachines(state).length === 0) return 'Buy an espresso machine';
+  if (getSeats(state).length === 0) return 'Buy a table so customers have somewhere to sit';
+
+  var waiting = state.customers.filter(function (c) { return c.order && !c.served; });
+  if (waiting.length > 0) {
+    // holding a drink someone wants? go deliver it
+    for (var i = 0; i < waiting.length; i++) {
+      if (state.carrying.indexOf(waiting[i].order) !== -1) {
+        return 'Bring the ' + CONFIG.drinks[waiting[i].order].name + ' to the customer';
+      }
+    }
+    return 'Walk to the ' + CONFIG.drinks[waiting[0].order].name + ' machine to grab their drink';
+  }
+  if (state.customers.some(function (c) { return c.step === 'ordering'; })) return 'A customer is ordering…';
+  if (state.customers.length === 0) return 'Customers are on their way…';
+  return '';
 }
 
 // Called whenever the screen size or orientation changes.
@@ -64,24 +114,31 @@ function updatePlayer(dt) {
 // Seconds since the last automatic save
 var timeSinceSave = 0;
 
-// Advance the game by dt seconds.
+// Advance the game by dt seconds. Returns how many coins reached the
+// cash display (for the HUD bump).
 function update(dt) {
   state.time += dt;
   updateInput();
   updatePlayer(dt);
   updateMachines(state, dt);
+  updateCustomers(state, dt);
 
-  // save straight away after the important moments
   var bought = tryBuyPads(state);
-  var collected = tryCollect(state);
+  if (bought) repathCustomers(state); // nobody walks through the new item
+  var picked = tryPickup(state);
+  var served = tryDeliver(state);
+
+  // save straight away after the important moments, and every few seconds
   timeSinceSave += dt;
-  if (bought || collected > 0 || timeSinceSave >= CONFIG.save.intervalSeconds) {
+  if (bought || picked || served || timeSinceSave >= CONFIG.save.intervalSeconds) {
     saveGame(state);
     timeSinceSave = 0;
   }
 
   updateFloaters(state);
+  var arrived = updateCoins(state, dt);
   followCamera(state.player, dt);
+  return arrived;
 }
 
 // The main loop: runs once per screen refresh (~60 times a second).
@@ -97,9 +154,9 @@ function loop(now) {
   var dt = Math.min((now - lastTime) / 1000, 0.1);
   lastTime = now;
 
-  update(dt);
+  var arrived = update(dt);
   drawWorld(state);
-  updateHud();
+  updateHud(arrived);
 }
 
 // ----- Start the game -----

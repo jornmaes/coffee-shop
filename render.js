@@ -1,7 +1,8 @@
 // =============================================================
-// render.js — draws the game world onto the canvas.
-// Everything is positioned in "world units" (tiles) and converted
-// to screen pixels by the camera.
+// render.js — the camera, and drawing each frame in the right
+// order. What things look like lives in art.js.
+// Everything is positioned in tiles and converted to screen
+// pixels by the camera.
 // =============================================================
 
 var canvas = document.getElementById('game');
@@ -86,28 +87,13 @@ function drawCheckerboard(x, y, width, height, colorA, colorB) {
   }
 }
 
-// Draw the shop walls. The rectangles come from world.js, so what you
-// see is exactly what you bump into. (wallRects, not solidRects: solidRects
-// also holds bought items, which would show up as brown squares.)
+// Draw the shop walls. (wallRects, not solidRects: solidRects also
+// holds bought items, which would show up as brown squares.)
 function drawWalls() {
   for (var i = 0; i < wallRects.length; i++) {
     var r = wallRects[i];
     fillWorldRect(r.x, r.y, r.w, r.h, CONFIG.colors.wall);
   }
-}
-
-// Trace a rounded rectangle path (in screen pixels). Call fill/stroke after.
-function roundRectPath(x, y, w, h, radius) {
-  ctx.beginPath();
-  if (w <= 0 || h <= 0) return; // nothing to draw (e.g. first frame of a pop-in)
-  // corner size can't be negative or bigger than half the box
-  var r = Math.max(0, Math.min(radius, w / 2, h / 2));
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
 }
 
 // Set the canvas font, sized in tiles so text scales with the zoom.
@@ -154,17 +140,18 @@ function drawPads(state) {
     setFont(0.55, 700);
     ctx.fillText(pad.price === 0 ? 'FREE' : '☕ ' + pad.price, s.x + w / 2, s.y + h / 2);
 
-    // name in a little label above the pad
+    // name in a little label above the pad, plus the cozy bonus for decorations
+    var label = pad.name + (pad.builds.cozy ? '  ♥+' + pad.builds.cozy + '%' : '');
     setFont(0.45, 600);
-    var labelW = ctx.measureText(pad.name).width + camera.scale * 0.5;
+    var labelW = ctx.measureText(label).width + camera.scale * 0.5;
     var labelH = camera.scale * 0.65;
     var lx = s.x + w / 2 - labelW / 2;
     var ly = s.y - labelH - camera.scale * 0.15;
-    ctx.fillStyle = 'rgba(255, 246, 232, 0.9)';
+    ctx.fillStyle = 'rgba(255, 246, 232, 0.92)';
     roundRectPath(lx, ly, labelW, labelH, labelH / 2);
     ctx.fill();
     ctx.fillStyle = col.padText;
-    ctx.fillText(pad.name, s.x + w / 2, ly + labelH / 2);
+    ctx.fillText(label, s.x + w / 2, ly + labelH / 2);
 
     ctx.restore();
   }
@@ -184,153 +171,128 @@ function popScale(state, padId) {
   return Math.max(0, scale);
 }
 
-// How round the corners of built items are, in tiles.
-var ITEM_CORNER = 0.3;
+// Item types that get a soft square shadow underneath.
+var SHADOWED_TYPES = { counter: true, machine: true, bookshelf: true, chalkboard: true };
 
-// Draw one built item. (x, y, w, h) is its box in screen pixels.
-function drawItemShape(type, x, y, w, h) {
-  var col = CONFIG.colors;
-  var u = camera.scale; // one tile in pixels, handy for small details
-
-  if (type === 'counter') {
-    // wooden counter: darker front, lighter top
-    ctx.fillStyle = col.wood;
-    roundRectPath(x, y, w, h, u * ITEM_CORNER);
-    ctx.fill();
-    // the lighter top band is clipped to the counter's rounded shape,
-    // so it follows the rounded corners instead of poking out
-    ctx.save();
-    ctx.clip();
-    ctx.fillStyle = col.woodLight;
-    ctx.fillRect(x, y, w, h * 0.55);
-    ctx.restore();
-
-  } else if (type === 'espresso') {
-    // metal machine with a dark panel, a red light and a little cup
-    ctx.fillStyle = col.metal;
-    roundRectPath(x, y, w, h, u * ITEM_CORNER);
-    ctx.fill();
-    ctx.fillStyle = col.metalDark;
-    roundRectPath(x + w * 0.12, y + h * 0.12, w * 0.76, h * 0.38, u * 0.08);
-    ctx.fill();
-    ctx.fillStyle = '#e0604f';
-    ctx.beginPath();
-    ctx.arc(x + w * 0.8, y + h * 0.75, u * 0.09, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff6e8';
-    ctx.beginPath();
-    ctx.arc(x + w * 0.4, y + h * 0.75, u * 0.16, 0, Math.PI * 2);
-    ctx.fill();
-
-  } else if (type === 'table') {
-    // round table with a chair on each side
-    var cx = x + w / 2, cy = y + h / 2;
-    ctx.fillStyle = col.wood;
-    ctx.beginPath();
-    ctx.arc(x + w * 0.1, cy, u * 0.22, 0, Math.PI * 2);
-    ctx.arc(x + w * 0.9, cy, u * 0.22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = col.woodLight;
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.min(w, h) * 0.32, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff6e8';
-    ctx.beginPath();
-    ctx.arc(cx, cy, u * 0.1, 0, Math.PI * 2);
-    ctx.fill();
-
-  } else {
-    // unknown type: a plain box so mistakes in config are easy to spot
-    ctx.fillStyle = '#ff00ff';
-    ctx.fillRect(x, y, w, h);
-  }
-}
-
-// Draw every item that has been bought, popping in new ones.
-function drawBuiltItems(state) {
-  for (var i = 0; i < CONFIG.pads.length; i++) {
-    var pad = CONFIG.pads[i];
-    if (!state.bought[pad.id]) continue;
-
+// Draw bought items. onlyFloor = true draws just the flat floor items
+// (rugs), false draws everything else.
+function drawBuiltItems(state, onlyFloor) {
+  getBoughtPads(state).forEach(function (pad) {
     var b = pad.builds;
+    if (!!b.floor !== onlyFloor) return;
+
     var scale = popScale(state, pad.id);
-    var w = b.w * camera.scale * scale;
-    var h = b.h * camera.scale * scale;
+    if (scale <= 0) return;
+    var k = camera.scale * scale;
+    var w = b.w * k, h = b.h * k;
     // grow from the item's center
     var center = worldToScreen(b.x + b.w / 2, b.y + b.h / 2);
+    var x = center.x - w / 2, y = center.y - h / 2;
 
     ctx.save();
-    // soft shadow underneath
-    ctx.fillStyle = CONFIG.colors.shadow;
-    roundRectPath(center.x - w / 2 + camera.scale * 0.08, center.y - h / 2 + camera.scale * 0.12, w, h, camera.scale * ITEM_CORNER);
-    ctx.fill();
-    drawItemShape(b.type, center.x - w / 2, center.y - h / 2, w, h);
+    if (SHADOWED_TYPES[b.type]) {
+      fillRoundRect(x + k * 0.08, y + k * 0.12, w, h, k * 0.3, CONFIG.colors.shadow);
+    }
+    drawItem(pad, x, y, w, h, k, state);
     ctx.restore();
-  }
+  });
 }
 
-// Draw the cash register on the counter, how many coins it holds,
-// and the golden mat you stand on to collect them.
-function drawRegister(state) {
-  if (!isRegisterBuilt(state)) return;
-  var reg = CONFIG.register;
-  var col = CONFIG.colors;
-  var u = camera.scale;
-  // pop in together with the counter
-  var scale = popScale(state, reg.requires);
-  var hasCoins = state.register > 0;
+// Draw the barista and all customers, back to front (lower on screen =
+// drawn later, so it overlaps things behind it).
+function drawCharacters(state) {
+  var list = state.customers.slice();
+  list.push(state.player);
+  list.sort(function (a, b) { return a.y - b.y; });
 
-  ctx.save();
-
-  // --- the mat ---
-  var mc = worldToScreen(reg.mat.x + reg.mat.w / 2, reg.mat.y + reg.mat.h / 2);
-  var mw = reg.mat.w * u * scale, mh = reg.mat.h * u * scale;
-  if (hasCoins) {
-    var pulse = 0.5 + 0.5 * Math.sin(state.time * 5);
-    ctx.shadowColor = col.matGlow;
-    ctx.shadowBlur = u * (0.3 + 0.5 * pulse);
-  }
-  ctx.fillStyle = col.mat;
-  roundRectPath(mc.x - mw / 2, mc.y - mh / 2, mw, mh, u * 0.25);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-  ctx.lineWidth = Math.max(2, u * 0.07);
-  ctx.stroke();
-  if (scale > 0.5) {
-    ctx.fillStyle = col.padText;
-    setFont(0.4, 800);
-    ctx.fillText('COLLECT', mc.x, mc.y);
-  }
-
-  // --- the register box on the counter ---
-  var bc = worldToScreen(reg.box.x + reg.box.w / 2, reg.box.y + reg.box.h / 2);
-  var bw = reg.box.w * u * scale, bh = reg.box.h * u * scale;
-  ctx.fillStyle = '#4a3a30';
-  roundRectPath(bc.x - bw / 2, bc.y - bh / 2, bw, bh, u * 0.2);
-  ctx.fill();
-  ctx.fillStyle = '#9fd6a0'; // little green display
-  roundRectPath(bc.x - bw * 0.35, bc.y - bh * 0.35, bw * 0.7, bh * 0.3, u * 0.05);
-  ctx.fill();
-
-  // --- how many coins are waiting, in a bubble above the register ---
-  if (scale > 0.5) {
-    setFont(0.45, 700);
-    var label = '☕ ' + state.register + (state.register >= reg.cap ? ' FULL' : '');
-    var lw = ctx.measureText(label).width + u * 0.5;
-    var lh = u * 0.65;
-    var ly = bc.y - bh / 2 - lh - u * 0.1;
-    ctx.fillStyle = 'rgba(255, 246, 232, 0.92)';
-    roundRectPath(bc.x - lw / 2, ly, lw, lh, lh / 2);
-    ctx.fill();
-    ctx.fillStyle = col.padText;
-    ctx.fillText(label, bc.x, ly + lh / 2);
-  }
-
-  ctx.restore();
+  list.forEach(function (ch) {
+    var s = worldToScreen(ch.x, ch.y);
+    var r = ch.radius * camera.scale;
+    var bob = ch.moving ? Math.abs(Math.sin(ch.walkTime * 12)) * r * 0.15 : 0;
+    if (ch === state.player) {
+      var col = CONFIG.colors;
+      drawCharacter(s.x, s.y, r,
+        { shirt: col.playerApron, skin: col.playerBody, hair: col.playerHair, hairStyle: 'short' },
+        { faceX: ch.faceX, faceY: ch.faceY, bob: bob, apron: true });
+    } else {
+      drawCharacter(s.x, s.y, r, ch.look, { faceX: ch.faceX, faceY: ch.faceY, bob: bob });
+      // sipping: a little cup in front of them
+      if (ch.step === 'drinking') {
+        drawDrink(ch.order, s.x + ch.faceX * r * 0.7, s.y - r * 0.1, camera.scale * 0.42);
+      }
+    }
+  });
 }
 
-// Draw the "-25" texts that float up and fade after buying something.
+// Speech bubbles over customers, and the drinks the barista is holding.
+// Drawn after all characters so nothing covers them.
+function drawBubblesAndCarried(state) {
+  var k = camera.scale;
+  state.customers.forEach(function (c) {
+    var s = worldToScreen(c.x, c.y);
+    var top = s.y - c.radius * k * 1.4;
+    if (c.step === 'ordering') {
+      // thinking "..." with dots that light up one by one
+      drawBubble(s.x, top, k, false, function (cx, cy, size) {
+        var lit = Math.floor(state.time * 3) % 3;
+        for (var i = 0; i < 3; i++) {
+          fillCircle(cx + (i - 1) * size * 0.28, cy, size * 0.09, i === lit ? '#3b2a20' : '#c9b9a3');
+        }
+      });
+    } else if (c.order && !c.served) {
+      // the drink they want; glows green if the barista is holding it
+      var hasIt = state.carrying.indexOf(c.order) !== -1;
+      var bounce = c.step === 'waiting' ? Math.abs(Math.sin(state.time * 3 + c.id)) * k * 0.08 : 0;
+      drawBubble(s.x, top - bounce, k, hasIt, function (cx, cy, size) {
+        drawDrink(c.order, cx, cy, size * 0.95);
+      });
+    }
+  });
+
+  // the barista's drinks, floating in a row above their head
+  var p = state.player;
+  var ps = worldToScreen(p.x, p.y);
+  var n = state.carrying.length;
+  state.carrying.forEach(function (drink, i) {
+    var dx = (i - (n - 1) / 2) * k * 0.6;
+    var dy = ps.y - p.radius * k * 2.1 + Math.sin(state.time * 5 + i) * k * 0.04;
+    fillCircle(ps.x + dx, dy, k * 0.3, 'rgba(255, 250, 242, 0.85)');
+    drawDrink(drink, ps.x + dx, dy, k * 0.5);
+  });
+}
+
+// Coins: first they pop out of the customer (moving in the world), then
+// they fly to the cash counter in the top-left corner of the screen.
+function drawCoins(state) {
+  var fx = CONFIG.effects;
+  var cashEl = document.getElementById('cash');
+  var rect = cashEl.getBoundingClientRect();
+  var target = { x: rect.left + 18, y: rect.top + rect.height / 2 };
+  var k = camera.scale;
+
+  state.coins.forEach(function (coin) {
+    var age = state.time - coin.born;
+    if (age < 0) return;
+    var pos;
+    if (age < fx.coinBurstTime) {
+      pos = worldToScreen(coin.x, coin.y);
+    } else {
+      if (!coin.screenStart) coin.screenStart = worldToScreen(coin.x, coin.y);
+      var t = Math.min(1, (age - fx.coinBurstTime) / fx.coinFlyTime);
+      var ease = t * t; // speeds up toward the end
+      pos = {
+        x: coin.screenStart.x + (target.x - coin.screenStart.x) * ease,
+        y: coin.screenStart.y + (target.y - coin.screenStart.y) * ease,
+      };
+    }
+    var r = k * 0.17;
+    fillCircle(pos.x, pos.y, r, CONFIG.colors.coinDark);
+    fillCircle(pos.x, pos.y, r * 0.78, CONFIG.colors.coin);
+    fillCircle(pos.x - r * 0.25, pos.y - r * 0.25, r * 0.22, '#fff3c4'); // shine
+  });
+}
+
+// Draw the floating texts ("-25", "+8", "♥") that rise and fade.
 function drawFloaters(state) {
   var life = CONFIG.effects.floatTextTime;
   ctx.save();
@@ -339,59 +301,13 @@ function drawFloaters(state) {
     var f = state.floaters[i];
     var t = (state.time - f.born) / life; // 0 -> 1 over its lifetime
     var s = worldToScreen(f.x, f.y - t * 1.2); // rise 1.2 tiles
-    ctx.globalAlpha = 1 - t;
+    ctx.globalAlpha = Math.max(0, 1 - t);
     ctx.lineWidth = camera.scale * 0.12;
     ctx.strokeStyle = '#fff6e8';
     ctx.strokeText(f.text, s.x, s.y);
     ctx.fillStyle = f.color;
     ctx.fillText(f.text, s.x, s.y);
   }
-  ctx.restore();
-}
-
-// Draw the barista: a soft shadow, a green apron body, a head,
-// and two little eyes looking the way they walk.
-function drawPlayer(player) {
-  var s = worldToScreen(player.x, player.y);
-  var r = player.radius * camera.scale;
-  var col = CONFIG.colors;
-
-  // a small bounce while walking
-  var bob = player.moving ? Math.abs(Math.sin(player.walkTime * 12)) * r * 0.15 : 0;
-
-  ctx.save();
-
-  // shadow on the floor (doesn't bounce)
-  ctx.fillStyle = col.shadow;
-  ctx.beginPath();
-  ctx.ellipse(s.x, s.y + r * 0.7, r * 1.0, r * 0.45, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // body (apron)
-  ctx.fillStyle = col.playerApron;
-  ctx.beginPath();
-  ctx.arc(s.x, s.y - bob, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // head, nudged a little in the facing direction
-  var hx = s.x + player.faceX * r * 0.2;
-  var hy = s.y - bob - r * 0.35 + player.faceY * r * 0.15;
-  ctx.fillStyle = col.playerBody;
-  ctx.beginPath();
-  ctx.arc(hx, hy, r * 0.62, 0, Math.PI * 2);
-  ctx.fill();
-
-  // eyes (only when facing somewhat toward the screen or sideways)
-  if (player.faceY > -0.5) {
-    ctx.fillStyle = '#3b2a20';
-    var ex = player.faceX * r * 0.22;
-    var ey = player.faceY * r * 0.12;
-    ctx.beginPath();
-    ctx.arc(hx - r * 0.22 + ex, hy + ey, r * 0.08, 0, Math.PI * 2);
-    ctx.arc(hx + r * 0.22 + ex, hy + ey, r * 0.08, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   ctx.restore();
 }
 
@@ -435,14 +351,12 @@ function drawBuildArea() {
   // a friendly label near the top (the middle is where the first pad sits)
   var mid = worldToScreen(p.x + p.width / 2, p.y + margin + 1.2);
   ctx.fillStyle = CONFIG.colors.buildArea;
-  ctx.font = '600 ' + Math.round(camera.scale * 0.6) + 'px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  setFont(0.6, 600);
   ctx.fillText('Your café starts here', mid.x, mid.y);
   ctx.restore();
 }
 
-// Draw the whole world for one frame.
+// Draw the whole world for one frame, back to front.
 function drawWorld(state) {
   var w = CONFIG.world;
   var p = CONFIG.plot;
@@ -457,10 +371,12 @@ function drawWorld(state) {
   drawWalls();
   // show the "starts here" hint only while the shop is still empty
   if (Object.keys(state.bought).length === 0) drawBuildArea();
+  drawBuiltItems(state, true);  // rugs lie under everything
   drawPads(state);
-  drawBuiltItems(state);
-  drawRegister(state);
-  drawPlayer(state.player);
+  drawBuiltItems(state, false); // furniture, machines, decorations
+  drawCharacters(state);
+  drawBubblesAndCarried(state);
   drawFloaters(state);
+  drawCoins(state);
   drawJoystick(); // last, so it sits on top of everything
 }

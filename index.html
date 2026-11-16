@@ -16,10 +16,12 @@
   <div id="hud">
     <div id="money">
       <div id="cash">☕ 0</div>
-      <div id="income">+0/s</div>
+      <div id="cozy"></div>
     </div>
     <!-- Settings does nothing yet; it gets a menu in a later part -->
     <button id="settings-btn" aria-label="Settings">⚙</button>
+    <!-- "What to do next" tip for new players -->
+    <div id="hint"></div>
   </div>
 
   <!-- Shown instead of the game when the phone is held upright -->
@@ -32,8 +34,11 @@
   <!-- Classic scripts; config.js must load first -->
   <script src="config.js"></script>
   <script src="world.js"></script>
+  <script src="path.js"></script>
+  <script src="customers.js"></script>
   <script src="save.js"></script>
   <script src="render.js"></script>
+  <script src="art.js"></script>
   <script src="input.js"></script>
   <script src="game.js"></script>
 </body>
