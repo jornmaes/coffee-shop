@@ -14,7 +14,7 @@ var quiet = process.argv[4] === 'quiet';
 
 function freshState(cash) {
   return { cash: cash, time: 0, bought: {}, builtAt: {}, machines: {}, carrying: [], stats: { served: 0 },
-    customers: [], nextCustomerId: 1, spawnTimer: 2, floaters: [], coins: [],
+    customers: [], helpers: [], nextCustomerId: 1, spawnTimer: 2, floaters: [], coins: [],
     player: { x: C.player.startX, y: C.player.startY, radius: PR, faceX: 0, faceY: 1 } };
 }
 var s = freshState(C.start.cash);
@@ -72,6 +72,7 @@ while (s.time < maxTime && ctx.getVisiblePads(s).length > 0) {
   s.time += dt;
   ctx.updateMachines(s, dt);
   ctx.updateCustomers(s, dt);
+  ctx.updateHelpers(s, dt);
   botThink();
   var bought = ctx.tryBuyPads(s, dt);
   if (bought) {
@@ -104,14 +105,24 @@ while (s.time < maxTime && ctx.getVisiblePads(s).length > 0) {
   if (q.length > C.customers.maxQueue) check('queue never longer than maxQueue', false);
   if (s.carrying.length > ctx.getCarryLimit(s)) check('never carry more than allowed', false);
   if (s.cash < 0) check('cash never negative', false);
+  s.helpers.forEach(function (h) {
+    if (h.carrying !== null && !C.menu[h.carrying]) check('helpers only carry real items', false);
+    // a helper never stays busy without moving for long (no getting stuck)
+    if (h.step !== 'idle') {
+      if (!h.watch || Math.hypot(h.x - h.watch.x, h.y - h.watch.y) > 0.05) h.watch = { x: h.x, y: h.y, t: s.time };
+      else if (s.time - h.watch.t > 20) check('helper ' + h.id + ' stuck in ' + h.step + ' at ' + h.x.toFixed(1) + ',' + h.y.toFixed(1), false);
+    } else h.watch = null;
+  });
   var holdsNow = ctx.getTrayHolds(s);
   Object.keys(s.machines).forEach(function (id) { if (s.machines[id].ready > holdsNow) check('machine tray overfull', false); });
 }
 var minutes = (s.time / 60).toFixed(0);
+var totalEarned = s.cash - C.start.cash + ctx.getBoughtPads(s).reduce(function (sum, p) { return sum + p.price; }, 0);
+var helperShare = Math.round(100 * (s.stats.helperEarned || 0) / Math.max(1, totalEarned));
 function at(id) { return milestones[id] ? (milestones[id] / 60).toFixed(0) + 'm' : 'never'; }
 if (!quiet) console.log('     build timeline (minutes): ' + log.join(' '));
 console.log('     seed ' + process.argv[3] + ': bakery ' + at('openBakery') + ', patio ' + at('openPatio') + ', lounge ' + at('openLounge') +
-  ', all ' + C.pads.length + ' pads ' + minutes + 'm | served ' + s.stats.served + ', first at ' + (firstServe || 0).toFixed(0) +
+  ', all ' + C.pads.length + ' pads ' + minutes + 'm | helpers earned ' + helperShare + '% | served ' + s.stats.served + ', first at ' + (firstServe || 0).toFixed(0) +
   's, VIPs ' + vips + ', combos ' + combos + ', max customers ' + maxCustomers);
 check('every pad bought (no getting stuck)', ctx.getVisiblePads(s).length === 0);
 check('first customer served within 60s', firstServe !== null && firstServe < 60);
@@ -119,6 +130,7 @@ check('café part takes 15-60 min (bakery opens at ' + at('openBakery') + ')', m
 // (Part 10 retunes the prices for ~10 h and tightens this to 8-12 h)
 check('whole build takes 1.5-12 hours for the bot (got ' + minutes + 'm)', s.time > 90 * 60 && s.time < 720 * 60);
 check('some VIPs and combos happened', vips > 0 && combos > 0);
+check('helpers earned part of the money (' + helperShare + '%)', helperShare > 3);
 
 // ---- specific rules, tested directly ----
 function fresh() { var t = freshState(0); t.bought = { counter: true, espresso1: true, table1: true }; t.spawnTimer = 0; t.player = { x: 32, y: 22, radius: PR }; return t; }
@@ -226,7 +238,7 @@ var picked = 0; for (k = 0; k < 5; k++) if (ctx.tryPickup(up)) picked++;
 check('carry upgrade: picks up 3 (got ' + picked + ')', picked === 3);
 // requires lists: a level-up only shows once its machine AND the previous upgrade are bought
 var rq = fresh(); rq.bought.cappuccino = true; rq.bought.espressoLv2 = true; rq.bought.espressoLv3 = true;
-rq.bought.cappuccinoLv2 = true; rq.bought.espressoLv4 = true; rq.bought.cappuccinoLv3 = true;
+rq.bought.cappuccinoLv2 = true; rq.bought.espressoLv4 = true; rq.bought.cappuccinoLv3 = true; rq.bought.helperCafe = true;
 var latteUp = ctx.getPad('latteLv2');
 check('Latte ★2 hidden without the latte machine', !ctx.isPadVisible(rq, latteUp));
 rq.bought.latte = true;
@@ -257,6 +269,67 @@ var broke = fresh(); broke.bought.cappuccino = true; broke.cash = 0; ctx.rebuild
 broke.player.x = spot.x + spot.w / 2; broke.player.y = spot.y + spot.h / 2;
 ctx.tryBuyPads(broke, hold * 2);
 check('too poor: the ring does not fill', !broke.padHold && !broke.bought.espressoLv2);
+
+// ---- helpers ----
+function withHelper() {
+  var t = fresh(); t.bought.cappuccino = true; t.bought.helperCafe = true; t.spawnTimer = 1e9;
+  ctx.rebuildSolids(t); ctx.syncHelpers(t);
+  return t;
+}
+var hs = withHelper();
+check('buying the hire pad makes one helper at home', hs.helpers.length === 1 && hs.helpers[0].x === ctx.getPad('helperCafe').builds.x);
+ctx.syncHelpers(hs);
+check('no duplicate helpers', hs.helpers.length === 1);
+// a waiting customer + a ready espresso: the helper fetches and serves it
+var seatsH = ctx.getSeats(hs);
+// a brand-new seated customer who wants one espresso
+function waitingCustomer() {
+  return { id: 7, x: seatsH[0].x, y: seatsH[0].y, radius: CR, step: 'waiting', seatKey: seatsH[0].key, vip: false,
+    ordered: ['espresso'], orders: ['espresso'], served: false, timer: 0, path: [], target: null, faceX: 1, faceY: 0 };
+}
+var hc = waitingCustomer();
+hs.customers = [hc];
+hs.machines.espresso1 = { ready: 1, timer: 0 }; hs.machines.cappuccino = { ready: 1, timer: 0 };
+hs.player.x = 40; hs.player.y = 22; // the barista stays out of it
+var cashH = hs.cash, wrongPicked = false;
+for (k = 0; k < 30 * 40 && !hc.served; k++) {
+  hs.time += 1 / 30; ctx.updateHelpers(hs, 1 / 30);
+  if (hs.helpers[0].carrying && hs.helpers[0].carrying !== 'espresso') wrongPicked = true;
+}
+check('helper serves a waiting customer on their own', hc.served && hs.cash - cashH === C.menu.espresso.price);
+check('helper only picks up what was ordered (not the cappuccino)', !wrongPicked && hs.machines.cappuccino.ready === 1);
+check('helper earnings are counted', hs.stats.helperEarned === C.menu.espresso.price);
+check('helper is empty-handed afterwards', hs.helpers[0].carrying === null);
+// barista first: if the barista already holds the item, the helper doesn't fetch another
+var hb = withHelper(); hb.player.x = 40; hb.player.y = 22;
+var hc2 = waitingCustomer(); hb.customers = [hc2];
+hb.machines.espresso1 = { ready: 1, timer: 0 }; hb.carrying = ['espresso'];
+for (k = 0; k < 30 * 10; k++) { hb.time += 1 / 30; ctx.updateHelpers(hb, 1 / 30); }
+check('no double fetching when the barista already has it', hb.machines.espresso1.ready === 1 && hb.helpers[0].carrying === null && hc2.orders.length === 1);
+// helper holding an item nobody wants any more keeps it, and serves the next customer who orders it
+var hk = withHelper(); hk.player.x = 40; hk.player.y = 22; hk.helpers[0].carrying = 'espresso';
+for (k = 0; k < 30 * 3; k++) { hk.time += 1 / 30; ctx.updateHelpers(hk, 1 / 30); }
+check('an unwanted item is kept, not thrown away', hk.helpers[0].carrying === 'espresso');
+hk.customers = [waitingCustomer()];
+for (k = 0; k < 30 * 40 && !hk.customers[0].served; k++) { hk.time += 1 / 30; ctx.updateHelpers(hk, 1 / 30); }
+check('...and handed to the next customer who orders it', hk.customers[0].served);
+// two helpers never fetch the same single order
+var h2 = withHelper(); h2.bought.openBakery = true; h2.bought.oven1 = true; h2.bought.btable1 = true;
+h2.bought.croissantLv2 = true; h2.bought.helperBakery = true; ctx.rebuildSolids(h2); ctx.syncHelpers(h2);
+h2.player.x = 40; h2.player.y = 22;
+h2.customers = [waitingCustomer()]; h2.machines.espresso1 = { ready: 2, timer: 0 };
+var maxHeld = 0;
+for (k = 0; k < 30 * 40; k++) {
+  h2.time += 1 / 30; ctx.updateHelpers(h2, 1 / 30);
+  var held = h2.helpers.filter(function (h) { return h.carrying === 'espresso'; }).length;
+  maxHeld = Math.max(maxHeld, held);
+}
+check('two helpers: only one fetches a single order', h2.helpers.length === 2 && maxHeld === 1 && h2.machines.espresso1.ready >= 1);
+// helper speed upgrade
+var hsp = withHelper();
+check('helper base speed', ctx.getHelperSpeed(hsp) === C.helpers.speed);
+hsp.bought.helperShoes1 = true;
+check('helper sneakers: 25% faster', Math.abs(ctx.getHelperSpeed(hsp) - C.helpers.speed * 1.25) < 1e-9);
 
 console.log(passes + ' flow checks passed, ' + fails + ' failed');
 process.exit(fails ? 1 : 0);

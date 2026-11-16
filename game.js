@@ -12,9 +12,11 @@ var state = {
   builtAt: {},              // when each item was bought this session (for the pop-in)
   machines: {},             // per machine: { ready: items on the tray, timer: seconds brewed }
   carrying: [],             // item ids the barista is holding, e.g. ['latte']
-  stats: { served: 0 },     // how many customers have been served (ever)
+  stats: { served: 0,       // how many customers have been served (ever)
+           helperEarned: 0 }, // coins helpers earned by handing things over (ever)
 
   customers: [],            // customers in the shop right now (not saved)
+  helpers: [],              // hired helpers (not saved: they come back from the bought pads)
   nextCustomerId: 1,
   spawnTimer: 2,            // seconds until the next customer may come in
 
@@ -209,6 +211,12 @@ function celebratePurchase(state, pad) {
     spawnConfetti(state, b.x + b.w / 2, b.y + b.h / 2, 18);
   } else if (b.type === 'upgrade') {
     celebrateUpgrade(state, pad);
+  } else if (b.type === 'helper') {
+    // a new helper pops up at their home spot
+    syncHelpers(state);
+    spawnConfetti(state, b.x, b.y, 24);
+    showBanner('🧑‍🍳 ' + pad.name.replace('Hire a ', '') + ' hired!',
+      'They fetch orders and serve customers all by themselves.');
   }
   // finished an area?
   var home = getPadArea(pad);
@@ -238,6 +246,8 @@ function openSettings() {
    ['Areas open', areas + ' / ' + CONFIG.areas.length],
    ['Pieces built', built + ' / ' + CONFIG.pads.length],
    ['Cozy bonus', '+' + getCozyBonus(state) + '%'],
+   ['Helpers', String(getHelperPads(state).length)],
+   ['Earned by helpers', '☕ ' + cashText(state.stats.helperEarned || 0)],
    ['Barista carries', getCarryLimit(state) + ' items'],
    ['Walking speed', '+' + Math.round((getPlayerSpeed(state) / CONFIG.player.speed - 1) * 100) + '%']].forEach(function (row) {
     var li = document.createElement('li');
@@ -343,6 +353,7 @@ function update(dt) {
   updatePlayer(dt);
   updateMachines(state, dt);
   updateCustomers(state, dt);
+  updateHelpers(state, dt);
 
   var bought = tryBuyPads(state, dt);
   if (bought) {

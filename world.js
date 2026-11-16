@@ -336,9 +336,13 @@ function countWanted(state, itemId) {
   return n;
 }
 
-// How many of this item is the barista holding?
+// How many of this item are the barista and the helpers holding?
 function countCarried(state, itemId) {
-  return state.carrying.filter(function (d) { return d === itemId; }).length;
+  var n = state.carrying.filter(function (d) { return d === itemId; }).length;
+  (state.helpers || []).forEach(function (h) {
+    if (h.carrying === itemId) n++;
+  });
+  return n;
 }
 
 // Is the player close enough to touch this rectangle?
@@ -460,6 +464,11 @@ function getCarryLimit(state) {
 // The barista's walking speed, in tiles per second.
 function getPlayerSpeed(state) {
   return CONFIG.player.speed * (1 + sumUpgrades(state, 'speedPlus') / 100);
+}
+
+// A helper's walking speed, in tiles per second (faster with helper shoes).
+function getHelperSpeed(state) {
+  return CONFIG.helpers.speed * (1 + sumUpgrades(state, 'helperSpeedPlus') / 100);
 }
 
 // How many finished items each machine keeps ready on its tray.

@@ -325,7 +325,7 @@ var SHADOWED_TYPES = { counter: true, machine: true, bookshelf: true, chalkboard
 function drawBuiltItems(state, onlyFloor) {
   getBoughtPads(state).forEach(function (pad) {
     var b = pad.builds;
-    if (b.type === 'expansion' || b.type === 'upgrade') return; // nothing to draw on the floor
+    if (b.type === 'expansion' || b.type === 'upgrade' || b.type === 'helper') return; // nothing to draw on the floor
     if (!!b.floor !== onlyFloor) return;
 
     var scale = popScale(state, pad.id);
@@ -351,7 +351,7 @@ function drawBuiltItems(state, onlyFloor) {
 // Draw the barista and all customers, back to front (lower on screen =
 // drawn later, so it overlaps things behind it).
 function drawCharacters(state) {
-  var list = state.customers.slice();
+  var list = state.customers.concat(state.helpers || []);
   list.push(state.player);
   list.sort(function (a, b) { return a.y - b.y; });
 
@@ -364,6 +364,9 @@ function drawCharacters(state) {
       drawCharacter(s.x, s.y, r,
         { shirt: col.playerApron, skin: col.playerBody, hair: col.playerHair, hairStyle: 'short' },
         { faceX: ch.faceX, faceY: ch.faceY, bob: bob, apron: true });
+    } else if (ch.home) {
+      // a helper: cap, apron and their own shirt color
+      drawCharacter(s.x, s.y, r, ch.look, { faceX: ch.faceX, faceY: ch.faceY, bob: bob, apron: true });
     } else {
       drawCharacter(s.x, s.y, r, ch.look, { faceX: ch.faceX, faceY: ch.faceY, bob: bob, vip: ch.vip, time: state.time });
       // enjoying their order: the items in front of them
@@ -411,6 +414,15 @@ function drawBubblesAndCarried(state) {
         });
       });
     }
+  });
+
+  // each helper's item, floating above their head
+  (state.helpers || []).forEach(function (h) {
+    if (!h.carrying) return;
+    var hs = worldToScreen(h.x, h.y);
+    var hy = hs.y - h.radius * k * 2.1 + Math.sin(state.time * 5 + 1) * k * 0.04;
+    fillCircle(hs.x, hy, k * 0.27, 'rgba(255, 250, 242, 0.85)');
+    drawMenuItem(h.carrying, hs.x, hy, k * 0.45);
   });
 
   // the barista's items, floating in a row above their head

@@ -11,7 +11,7 @@ function fresh() { return { cash: 0, time: 0, bought: {}, builtAt: {}, machines:
   customers: [], nextCustomerId: 1, spawnTimer: 0, floaters: [], coins: [],
   player: { x: C.player.startX, y: C.player.startY, radius: PR } }; }
 // pads that put something on the floor (expansions open an area, upgrades improve things)
-var isItem = function (p) { return p.builds.type !== 'expansion' && p.builds.type !== 'upgrade'; };
+var isItem = function (p) { return p.builds.type !== 'expansion' && p.builds.type !== 'upgrade' && p.builds.type !== 'helper'; };
 // approximate label box above a pad (font 0.45 tiles, ~0.26 tiles per character)
 function labelBox(p) {
   var text = p.name + (p.builds.cozy ? '  ♥+' + p.builds.cozy + '%' : '');
@@ -144,6 +144,28 @@ function checkPaths(label, state) {
   });
 }
 checkPaths('all built', all);
+
+// ---- helpers: their home spot is free, in their area, and they can walk everywhere ----
+C.pads.filter(function (p) { return p.builds.type === 'helper'; }).forEach(function (p) {
+  var h = p.builds, HR = C.helpers.radius;
+  check(p.id + ': home inside the area of its pad', areaOf(box(h.x, h.y, HR)) === areaOf(p.pad));
+  ctx.rebuildSolids(all);
+  check(p.id + ': home not blocked (everything built)', !ctx.isBlocked(h.x, h.y, HR));
+  var whenHired = stateWith(ancestors(p).concat([p.id])); ctx.rebuildSolids(whenHired);
+  check(p.id + ': home not blocked (when hired)', !ctx.isBlocked(h.x, h.y, HR));
+  [whenHired, all].forEach(function (st, n) {
+    ctx.rebuildSolids(st);
+    ctx.getBuiltMachines(st).forEach(function (m) {
+      var f = ctx.machineFrontSpot(m);
+      check(p.id + ' (' + (n ? 'all built' : 'when hired') + ') can walk to machine ' + m.id, !!ctx.findPath(h.x, h.y, f.x, f.y));
+    });
+    ctx.getSeats(st).forEach(function (s) {
+      check(p.id + ' (' + (n ? 'all built' : 'when hired') + ') can walk to seat ' + s.key, !!ctx.findPath(h.x, h.y, s.x, s.y));
+    });
+  });
+  check(p.id + ': hire pad is in a chain that shows up', ancestors(p) !== null);
+});
+ctx.rebuildSolids(all);
 checkPaths('minimal', stateWith(['counter', 'espresso1', 'table1']));
 // each area right after it opens, with only its first table
 ['btable1', 'ptable1', 'lchairs1'].forEach(function (id) { checkPaths('stage ' + id, stateWith(ancestors(byId[id]).concat([id]))); });

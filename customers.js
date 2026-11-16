@@ -72,10 +72,11 @@ function walkTo(c, x, y) {
   c.path = findPath(c.x, c.y, x, y) || [{ x: x, y: y }];
 }
 
-// Recalculate every walking customer's route. Called after something new is
-// built, so nobody walks through a brand-new table.
+// Recalculate every walking customer's (and helper's) route. Called after
+// something new is built, so nobody walks through a brand-new table.
 function repathCustomers(state) {
-  state.customers.forEach(function (c) {
+  var walkers = state.customers.concat(state.helpers || []);
+  walkers.forEach(function (c) {
     if (c.target && c.path.length > 0) walkTo(c, c.target.x, c.target.y);
   });
 }
@@ -126,9 +127,10 @@ function spawnCustomer(state) {
   return c;
 }
 
-// Move a customer along their path. Returns true once they've arrived.
-function followPath(c, dt) {
-  var stepLeft = CONFIG.customers.speed * dt;
+// Move a customer (or helper) along their path. Returns true once they've
+// arrived. speed is optional (tiles per second; customers' speed if left out).
+function followPath(c, dt, speed) {
+  var stepLeft = (speed || CONFIG.customers.speed) * dt;
   c.moving = false;
   while (c.path.length > 0 && stepLeft > 0) {
     var p = c.path[0];
@@ -255,22 +257,31 @@ function tryDeliver(state) {
     if (item === null) continue; // the barista doesn't have anything they want
 
     state.carrying.splice(state.carrying.indexOf(item), 1);
-    c.orders.splice(c.orders.indexOf(item), 1);
-    if (c.orders.length === 0) {
-      c.served = true;
-      if (c.step === 'waiting') startDrinking(c);
-    }
-
-    // pay up!
-    var amount = getItemPayment(state, item, c.vip);
-    state.cash += amount;
-    if (c.served) state.stats.served += 1;
-    addFloater(state, (c.vip ? '★ +' : '+') + formatNumber(amount), c.x, c.y - 1, CONFIG.colors.earn);
-    if (c.served) addFloater(state, '♥', c.x + 0.5, c.y - 0.6, CONFIG.colors.heart);
-    spawnCoinBurst(state, c.x, c.y - 0.4, amount, c.vip);
+    handOver(state, c, item);
     return c;
   }
   return null;
+}
+
+// A customer receives one item they ordered (from the barista or a helper):
+// they pay for it, coins fly, and once they have everything they start
+// enjoying it. The caller has already taken the item out of its hands.
+// Returns the amount paid.
+function handOver(state, c, item) {
+  c.orders.splice(c.orders.indexOf(item), 1);
+  if (c.orders.length === 0) {
+    c.served = true;
+    if (c.step === 'waiting') startDrinking(c);
+  }
+
+  // pay up!
+  var amount = getItemPayment(state, item, c.vip);
+  state.cash += amount;
+  if (c.served) state.stats.served += 1;
+  addFloater(state, (c.vip ? '★ +' : '+') + formatNumber(amount), c.x, c.y - 1, CONFIG.colors.earn);
+  if (c.served) addFloater(state, '♥', c.x + 0.5, c.y - 0.6, CONFIG.colors.heart);
+  spawnCoinBurst(state, c.x, c.y - 0.4, amount, c.vip);
+  return amount;
 }
 
 // ---------- Coin effect ----------

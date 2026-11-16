@@ -45,6 +45,13 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
     machine trays (machines keep more items ready).
   - A pad that appears under the barista's feet waits until they step off
     it once, so one step never buys a whole chain of upgrades.
+- **Helpers** (the idle part): each area's upgrade chain includes a "Hire a
+  Helper" pad (helper, baker, waiter, host). A helper fetches items that
+  customers ordered and hands them over by themselves, one item at a time,
+  walking a bit slower than the barista; helper shoes make them faster.
+  The barista always comes first: helpers never block a pickup and just
+  find a new job if the barista was quicker. Helpers aren't saved; they come
+  back from the bought pads, empty-handed.
 - **Areas:** the shop grows into new areas, each with its own look, menu,
   furniture and decorations. A locked area shows as an outline with a sign
   on the grass, so you always see what's coming. A big **golden pad** inside
@@ -100,7 +107,7 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   the areas in config; a door is cut into a wall when its area opens.
 - **Pad name labels are drawn on top of everything** (after furniture and
   characters), so nothing can hide them.
-- **Customers walk with pathfinding** (`path.js`): a grid of half-tile cells,
+- **Customers and helpers walk with pathfinding** (`path.js`): a grid of half-tile cells,
   A* search, then the route is straightened. The grid is rebuilt whenever
   something is built, and walking customers re-plan their route.
 - **Save progress in `localStorage`.**
@@ -152,6 +159,7 @@ size, starting cash, effects.
   - `world.js`: areas and walls, collision, buy pads, machines, pickup, seats, cozy bonus
   - `path.js`: the walking grid and route finding for customers
   - `customers.js`: customer visits (queue, order, seat, pay, leave), combos, VIPs, coins
+  - `helpers.js`: helper baristas (find a job, fetch, hand over, walk home)
   - `save.js`: localStorage save/load
   - `art.js`: how everything looks (menu items, machines, furniture, decor, characters)
   - `render.js`: the camera and drawing each frame in the right order
@@ -209,8 +217,10 @@ Don't start the next part until the current one works and is committed.
       area: machine levels ★2–★4 (higher price, faster brewing), barista
       upgrades (carry more, walk faster, bigger trays). Logic tests moved into
       `tests/`.
-- [ ] **Part 9 — Helpers:** hire a helper barista per area who picks up and
-      delivers orders on their own (the idle part); helper upgrades.
+- [x] **Part 9 — Helpers:** a helper per area (hired from the upgrade chains)
+      who fetches and delivers orders on their own; helper shoes; earnings
+      by helpers in the stats. Also: hold-to-buy ring on pads, and
+      `index.html?cheat` money buttons for testing.
 - [ ] **Part 10 — Pacing to ~10 h:** rebalance prices so a fast bot needs
       about 10 hours (test allows 8–12 h), with never more than ~10 minutes
       between purchases.

@@ -106,6 +106,9 @@ function loadGame(state) {
   if (data.stats && isGoodNumber(data.stats.served)) {
     state.stats.served = Math.max(0, Math.floor(data.stats.served));
   }
+  if (data.stats && isGoodNumber(data.stats.helperEarned)) {
+    state.stats.helperEarned = Math.max(0, data.stats.helperEarned);
+  }
 
   // bought items must be solid before we check the player's position
   rebuildSolids(state);

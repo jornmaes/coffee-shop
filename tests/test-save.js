@@ -10,7 +10,7 @@ var C = ctx.CONFIG, R = C.player.radius;
 var fails = 0, passes = 0;
 function check(name, ok) { if (!ok) { console.log('FAIL ' + name); fails++; } else passes++; }
 function fresh() {
-  return { cash: C.start.cash, time: 0, bought: {}, builtAt: {}, machines: {}, carrying: [], stats: { served: 0 },
+  return { cash: C.start.cash, time: 0, bought: {}, builtAt: {}, machines: {}, carrying: [], stats: { served: 0, helperEarned: 0 },
            customers: [], nextCustomerId: 1, spawnTimer: 2, floaters: [], coins: [],
            player: { x: C.player.startX, y: C.player.startY, radius: R, faceX: 0, faceY: 1 } };
 }
@@ -38,6 +38,9 @@ check('served count restored', b.stats.served === 7);
 check('player position restored', b.player.x === 20 && b.player.y === 11);
 check('loaded items are solid', ctx.solidRects.length === ctx.wallRects.length + 3);
 check('no customers after loading', b.customers.length === 0);
+check('helper earnings restored', b.stats.helperEarned === 0 && load({ stats: { served: 1, helperEarned: 1234.5 } }).s.stats.helperEarned === 1234.5);
+check('bad helper earnings ignored', load({ stats: { served: 1, helperEarned: -5 } }).s.stats.helperEarned === 0 &&
+  load({ stats: { served: 1, helperEarned: 'lots' } }).s.stats.helperEarned === 0);
 
 // --- your Part 5 save (version 1) still loads ---
 var v1 = load({ saveVersion: 1, cash: 40, register: 27, bought: { counter: true, espresso1: true, espresso2: true, table1: true },

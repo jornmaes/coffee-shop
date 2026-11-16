@@ -121,6 +121,15 @@ var CONFIG = {
     holds: 1,       // how many finished items a machine keeps ready on its tray (more with tray upgrades)
   },
 
+  // --- Helpers (hired with "Hire a Helper" pads) ---
+  // Helpers fetch items that customers ordered and hand them over, all by
+  // themselves. They carry one item at a time.
+  helpers: {
+    speed: 2.6,         // walking speed, in tiles per second (the barista walks 5)
+    radius: 0.42,       // body size (same as customers, so they fit the same paths)
+    thinkSeconds: 0.25, // how often an idle helper looks for a job (seconds)
+  },
+
   // --- Upgrades (blue pads) ---
   // Machine level-ups (★2, ★3, ★4) make one machine better. Each level adds:
   upgrades: {
@@ -181,6 +190,9 @@ var CONFIG = {
   //              carryPlus the barista can hold this many more items
   //              speedPlus the barista walks this many % faster
   //              trayPlus  every machine keeps this many more items ready
+  //              helperSpeedPlus  helpers walk this many % faster
+  //            type 'helper' hires a helper; x, y = their home spot (where they
+  //              wait when there's nothing to do), skin / hair = their colors
   //   requires can also be a list: ['latte', 'cappuccinoLv3'] = needs both.
   //   Each area has ONE upgrade spot; its upgrades show up there one after
   //   another (each one requires the previous one).
@@ -394,7 +406,7 @@ var CONFIG = {
       pad: { x: 39.2, y: 5.8, w: 2, h: 1.2 },
       builds: { type: 'records', x: 40.6, y: 4.3, w: 1.1, h: 1.0, solid: true, cozy: 10 } },
 
-    // ===== Upgrades: café machine levels (spot between the tables and the queue) =====
+    // ===== Upgrades: café machine levels and a helper (spot between the tables and the queue) =====
     { id: 'espressoLv2', name: 'Espresso ★2', price: 60, requires: 'cappuccino',
       pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'espresso1' } },
     { id: 'espressoLv3', name: 'Espresso ★3', price: 150, requires: 'espressoLv2',
@@ -405,7 +417,10 @@ var CONFIG = {
       pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'espresso1' } },
     { id: 'cappuccinoLv3', name: 'Cappuccino ★3', price: 480, requires: 'espressoLv4',
       pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'cappuccino' } },
-    { id: 'latteLv2', name: 'Latte ★2', price: 660, requires: ['cappuccinoLv3', 'latte'],
+    { id: 'helperCafe', name: 'Hire a Helper', price: 900, requires: 'cappuccinoLv3',
+      pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 },
+      builds: { type: 'helper', x: 38.4, y: 14.4, skin: '#e0a97c', hair: '#3b2a20' } },
+    { id: 'latteLv2', name: 'Latte ★2', price: 660, requires: ['helperCafe', 'latte'],
       pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'latte' } },
     { id: 'cappuccinoLv4', name: 'Cappuccino ★4', price: 1200, requires: 'latteLv2',
       pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'cappuccino' } },
@@ -426,26 +441,33 @@ var CONFIG = {
     { id: 'icedLv4', name: 'Iced Coffee ★4', price: 22000, requires: 'mochaLv4',
       pad: { x: 30.8, y: 19.0, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'iced' } },
 
-    // ===== Upgrades: the barista (on the Fairy Lights spot, once the lights are up) =====
+    // ===== Upgrades: the barista and helper shoes (on the Fairy Lights spot, once the lights are up) =====
     { id: 'shoes1', name: 'Quick Shoes', price: 600, requires: 'lights',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', speedPlus: 10 } },
     { id: 'carry3', name: 'Carry 3 Items', price: 1500, requires: 'shoes1',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', carryPlus: 1 } },
     { id: 'trays2', name: 'Bigger Trays', price: 2500, requires: 'carry3',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', trayPlus: 1 } },
-    { id: 'shoes2', name: 'Quicker Shoes', price: 4000, requires: 'trays2',
+    { id: 'helperShoes1', name: 'Helper Sneakers', price: 2000, requires: ['trays2', 'helperCafe'],
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', helperSpeedPlus: 25 } },
+    { id: 'shoes2', name: 'Quicker Shoes', price: 4000, requires: 'helperShoes1',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', speedPlus: 10 } },
     { id: 'carry4', name: 'Carry 4 Items', price: 9000, requires: 'shoes2',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', carryPlus: 1 } },
     { id: 'shoes3', name: 'Speedy Shoes', price: 15000, requires: 'carry4',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', speedPlus: 10 } },
-    { id: 'trays3', name: 'Huge Trays', price: 20000, requires: 'shoes3',
+    { id: 'helperShoes2', name: 'Helper Skates', price: 12000, requires: 'shoes3',
+      pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', helperSpeedPlus: 25 } },
+    { id: 'trays3', name: 'Huge Trays', price: 20000, requires: 'helperShoes2',
       pad: { x: 39.2, y: 15.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', trayPlus: 1 } },
 
-    // ===== Upgrades: bakery oven levels (spot between the bottom tables) =====
+    // ===== Upgrades: bakery oven levels and a helper (spot between the bottom tables) =====
     { id: 'croissantLv2', name: 'Croissant ★2', price: 1200, requires: ['oven1', 'btable1'],
       pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven1' } },
-    { id: 'croissantLv3', name: 'Croissant ★3', price: 3200, requires: 'croissantLv2',
+    { id: 'helperBakery', name: 'Hire a Baker', price: 3500, requires: 'croissantLv2',
+      pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 },
+      builds: { type: 'helper', x: 19.6, y: 13.6, skin: '#f6d7b8', hair: '#c98a4b' } },
+    { id: 'croissantLv3', name: 'Croissant ★3', price: 3200, requires: 'helperBakery',
       pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven1' } },
     { id: 'cupcakeLv2', name: 'Cupcake ★2', price: 3750, requires: ['croissantLv3', 'oven2'],
       pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven2' } },
@@ -462,10 +484,13 @@ var CONFIG = {
     { id: 'cinnamonLv4', name: 'Cinnamon Roll ★4', price: 64000, requires: 'cinnamonLv3',
       pad: { x: 12.7, y: 22.6, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'oven3' } },
 
-    // ===== Upgrades: patio machine levels (spot between the parasol tables) =====
+    // ===== Upgrades: patio machine levels and a helper (spot between the parasol tables) =====
     { id: 'lemonadeLv2', name: 'Lemonade ★2', price: 4500, requires: ['lemonade', 'ptable1'],
       pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'lemonade' } },
-    { id: 'lemonadeLv3', name: 'Lemonade ★3', price: 12000, requires: 'lemonadeLv2',
+    { id: 'helperPatio', name: 'Hire a Waiter', price: 9000, requires: 'lemonadeLv2',
+      pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 },
+      builds: { type: 'helper', x: 53.0, y: 16.0, skin: '#8d5b3e', hair: '#2c2c34' } },
+    { id: 'lemonadeLv3', name: 'Lemonade ★3', price: 12000, requires: 'helperPatio',
       pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'lemonade' } },
     { id: 'frappeLv2', name: 'Frappé ★2', price: 14400, requires: ['lemonadeLv3', 'frappe'],
       pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'frappe' } },
@@ -476,10 +501,13 @@ var CONFIG = {
     { id: 'frappeLv4', name: 'Frappé ★4', price: 96000, requires: 'frappeLv3',
       pad: { x: 46.6, y: 18.5, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'frappe' } },
 
-    // ===== Upgrades: lounge pot levels (spot under the first armchairs) =====
+    // ===== Upgrades: lounge pot levels and a helper (spot under the first armchairs) =====
     { id: 'hotchocLv2', name: 'Hot Chocolate ★2', price: 13500, requires: ['hotchoc', 'lchairs1'],
       pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'hotchoc' } },
-    { id: 'matchaLv2', name: 'Matcha ★2', price: 33000, requires: ['hotchocLv2', 'matcha'],
+    { id: 'helperLounge', name: 'Hire a Host', price: 25000, requires: 'hotchocLv2',
+      pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 },
+      builds: { type: 'helper', x: 31.4, y: 6.2, skin: '#c68a5e', hair: '#9a4a3a' } },
+    { id: 'matchaLv2', name: 'Matcha ★2', price: 33000, requires: ['helperLounge', 'matcha'],
       pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'matcha' } },
     { id: 'hotchocLv3', name: 'Hot Chocolate ★3', price: 36000, requires: 'matchaLv2',
       pad: { x: 27.4, y: 10.4, w: 2, h: 1.2 }, builds: { type: 'upgrade', machine: 'hotchoc' } },
@@ -527,6 +555,7 @@ var CONFIG = {
     playerBody: '#f2c9a0', // the barista's skin
     playerApron: '#4f7a5a',// the barista's green apron
     playerHair: '#5a3a28', // the barista's hair
+    helperShirt: '#d9824a',// helpers' shirt and cap (they wear the cream apron too)
     shadow: 'rgba(0, 0, 0, 0.18)', // soft shadow under characters and items
     pad: '#7ccf7a',        // buy pad you can afford
     padTooPricey: '#c9b9a3',// buy pad you can't afford yet
