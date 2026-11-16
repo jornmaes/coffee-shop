@@ -100,7 +100,7 @@ Don't start the next part until the current one works and is committed.
 
 ## ROADMAP
 
-- [ ] **Part 1 — Skeleton:** landscape canvas, HUD (cash, income, settings
+- [x] **Part 1 — Skeleton:** landscape canvas, HUD (cash, income, settings
       button), rotate overlay, shop floor drawn.
 - [ ] **Part 2 — Player movement:** joystick + keys, barista character,
       camera follows, walls block movement.
