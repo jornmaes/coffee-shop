@@ -20,9 +20,73 @@ function getWallRects() {
   ];
 }
 
-// All solid rectangles the player can't walk through.
-// Calculated once, since the walls never move.
+// All solid rectangles the player can't walk through: the walls plus
+// every solid item that has been built. Rebuilt whenever something is bought.
 var solidRects = getWallRects();
+
+// Recalculate solidRects from the walls and the bought items.
+function rebuildSolids(state) {
+  solidRects = getWallRects();
+  for (var i = 0; i < CONFIG.pads.length; i++) {
+    var pad = CONFIG.pads[i];
+    var b = pad.builds;
+    if (state.bought[pad.id] && b.solid) {
+      solidRects.push({ x: b.x, y: b.y, w: b.w, h: b.h });
+    }
+  }
+}
+
+// ---------- Buy pads ----------
+
+// Is this pad on the floor right now? (not bought yet, and the pad it
+// depends on has been bought)
+function isPadVisible(state, pad) {
+  if (state.bought[pad.id]) return false;
+  return pad.requires === null || !!state.bought[pad.requires];
+}
+
+// List of pads currently on the floor.
+function getVisiblePads(state) {
+  return CONFIG.pads.filter(function (pad) { return isPadVisible(state, pad); });
+}
+
+// Check if the player is standing on a pad they can afford, and buy it.
+// Returns the pad that was bought, or null.
+function tryBuyPads(state) {
+  var player = state.player;
+  // the player counts as "on" a pad once their middle half overlaps it
+  var reach = player.radius * 0.5;
+  var pads = getVisiblePads(state);
+
+  for (var i = 0; i < pads.length; i++) {
+    var pad = pads[i];
+    if (!overlapsRect(player.x, player.y, reach, pad.pad)) continue;
+    if (state.cash < pad.price) continue; // not enough yet: nothing happens, no penalty
+
+    state.cash -= pad.price;
+    state.bought[pad.id] = true;
+    state.builtAt[pad.id] = state.time; // remembered for the pop-in animation
+    rebuildSolids(state);
+
+    // a little floating "-25" above the pad
+    state.floaters.push({
+      text: '-' + pad.price,
+      x: pad.pad.x + pad.pad.w / 2,
+      y: pad.pad.y,
+      born: state.time,
+    });
+    return pad;
+  }
+  return null;
+}
+
+// Remove floating texts that have finished their animation.
+function updateFloaters(state) {
+  var life = CONFIG.effects.floatTextTime;
+  state.floaters = state.floaters.filter(function (f) {
+    return state.time - f.born < life;
+  });
+}
 
 // Tiny tolerance for rounding errors. Computers can't store numbers like
 // 0.35 exactly, so "just touching" a wall can look like overlapping it by

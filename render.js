@@ -95,6 +95,186 @@ function drawWalls() {
   }
 }
 
+// Trace a rounded rectangle path (in screen pixels). Call fill/stroke after.
+function roundRectPath(x, y, w, h, radius) {
+  var r = Math.min(radius, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Set the canvas font, sized in tiles so text scales with the zoom.
+function setFont(sizeInTiles, weight) {
+  ctx.font = (weight || 600) + ' ' + Math.round(sizeInTiles * camera.scale) + 'px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+}
+
+// Draw every pad that is currently on the floor.
+// Affordable pads glow and pulse; pads you can't afford yet are muted.
+function drawPads(state) {
+  var col = CONFIG.colors;
+  var pads = getVisiblePads(state);
+
+  for (var i = 0; i < pads.length; i++) {
+    var pad = pads[i];
+    var r = pad.pad;
+    var affordable = state.cash >= pad.price;
+    var s = worldToScreen(r.x, r.y);
+    var w = r.w * camera.scale;
+    var h = r.h * camera.scale;
+
+    ctx.save();
+
+    // soft pulsing glow around affordable pads
+    if (affordable) {
+      var pulse = 0.5 + 0.5 * Math.sin(state.time * 4);
+      ctx.shadowColor = col.pad;
+      ctx.shadowBlur = camera.scale * (0.3 + 0.4 * pulse);
+    }
+
+    // the pad itself
+    ctx.fillStyle = affordable ? col.pad : col.padTooPricey;
+    roundRectPath(s.x, s.y, w, h, camera.scale * 0.25);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = Math.max(2, camera.scale * 0.07);
+    ctx.stroke();
+
+    // price on the pad
+    ctx.fillStyle = col.padText;
+    setFont(0.55, 700);
+    ctx.fillText('☕ ' + pad.price, s.x + w / 2, s.y + h / 2);
+
+    // name in a little label above the pad
+    setFont(0.45, 600);
+    var labelW = ctx.measureText(pad.name).width + camera.scale * 0.5;
+    var labelH = camera.scale * 0.65;
+    var lx = s.x + w / 2 - labelW / 2;
+    var ly = s.y - labelH - camera.scale * 0.15;
+    ctx.fillStyle = 'rgba(255, 246, 232, 0.9)';
+    roundRectPath(lx, ly, labelW, labelH, labelH / 2);
+    ctx.fill();
+    ctx.fillStyle = col.padText;
+    ctx.fillText(pad.name, s.x + w / 2, ly + labelH / 2);
+
+    ctx.restore();
+  }
+}
+
+// How "popped in" a freshly built item is: 0 = just bought, 1 = done.
+// Overshoots slightly past 1 for a bouncy feel.
+function popScale(state, padId) {
+  var builtAt = state.builtAt[padId];
+  if (builtAt === undefined) return 1; // built long ago (e.g. loaded from a save)
+  var t = Math.min(1, (state.time - builtAt) / CONFIG.effects.buildPopTime);
+  // "ease out back" curve: goes a bit past 1, then settles
+  var c = 1.7;
+  return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
+}
+
+// Draw one built item. (x, y, w, h) is its box in screen pixels.
+function drawItemShape(type, x, y, w, h) {
+  var col = CONFIG.colors;
+  var u = camera.scale; // one tile in pixels, handy for small details
+
+  if (type === 'counter') {
+    // wooden counter: darker front, lighter top
+    ctx.fillStyle = col.wood;
+    roundRectPath(x, y, w, h, u * 0.15);
+    ctx.fill();
+    ctx.fillStyle = col.woodLight;
+    roundRectPath(x, y, w, h * 0.55, u * 0.15);
+    ctx.fill();
+
+  } else if (type === 'espresso') {
+    // metal machine with a dark panel, a red light and a little cup
+    ctx.fillStyle = col.metal;
+    roundRectPath(x, y, w, h, u * 0.15);
+    ctx.fill();
+    ctx.fillStyle = col.metalDark;
+    roundRectPath(x + w * 0.12, y + h * 0.12, w * 0.76, h * 0.38, u * 0.08);
+    ctx.fill();
+    ctx.fillStyle = '#e0604f';
+    ctx.beginPath();
+    ctx.arc(x + w * 0.8, y + h * 0.75, u * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff6e8';
+    ctx.beginPath();
+    ctx.arc(x + w * 0.4, y + h * 0.75, u * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else if (type === 'table') {
+    // round table with a chair on each side
+    var cx = x + w / 2, cy = y + h / 2;
+    ctx.fillStyle = col.wood;
+    ctx.beginPath();
+    ctx.arc(x + w * 0.1, cy, u * 0.22, 0, Math.PI * 2);
+    ctx.arc(x + w * 0.9, cy, u * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = col.woodLight;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(w, h) * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff6e8';
+    ctx.beginPath();
+    ctx.arc(cx, cy, u * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else {
+    // unknown type: a plain box so mistakes in config are easy to spot
+    ctx.fillStyle = '#ff00ff';
+    ctx.fillRect(x, y, w, h);
+  }
+}
+
+// Draw every item that has been bought, popping in new ones.
+function drawBuiltItems(state) {
+  for (var i = 0; i < CONFIG.pads.length; i++) {
+    var pad = CONFIG.pads[i];
+    if (!state.bought[pad.id]) continue;
+
+    var b = pad.builds;
+    var scale = popScale(state, pad.id);
+    var w = b.w * camera.scale * scale;
+    var h = b.h * camera.scale * scale;
+    // grow from the item's center
+    var center = worldToScreen(b.x + b.w / 2, b.y + b.h / 2);
+
+    ctx.save();
+    // soft shadow underneath
+    ctx.fillStyle = CONFIG.colors.shadow;
+    roundRectPath(center.x - w / 2 + camera.scale * 0.08, center.y - h / 2 + camera.scale * 0.12, w, h, camera.scale * 0.15);
+    ctx.fill();
+    drawItemShape(b.type, center.x - w / 2, center.y - h / 2, w, h);
+    ctx.restore();
+  }
+}
+
+// Draw the "-25" texts that float up and fade after buying something.
+function drawFloaters(state) {
+  var life = CONFIG.effects.floatTextTime;
+  ctx.save();
+  setFont(0.6, 800);
+  for (var i = 0; i < state.floaters.length; i++) {
+    var f = state.floaters[i];
+    var t = (state.time - f.born) / life; // 0 -> 1 over its lifetime
+    var s = worldToScreen(f.x, f.y - t * 1.2); // rise 1.2 tiles
+    ctx.globalAlpha = 1 - t;
+    ctx.lineWidth = camera.scale * 0.12;
+    ctx.strokeStyle = '#fff6e8';
+    ctx.strokeText(f.text, s.x, s.y);
+    ctx.fillStyle = '#b5523b';
+    ctx.fillText(f.text, s.x, s.y);
+  }
+  ctx.restore();
+}
+
 // Draw the barista: a soft shadow, a green apron body, a head,
 // and two little eyes looking the way they walk.
 function drawPlayer(player) {
@@ -178,8 +358,8 @@ function drawBuildArea() {
     (p.width - margin * 2) * camera.scale,
     (p.height - margin * 2) * camera.scale);
 
-  // a friendly label in the middle
-  var mid = worldToScreen(p.x + p.width / 2, p.y + p.height / 2);
+  // a friendly label near the top (the middle is where the first pad sits)
+  var mid = worldToScreen(p.x + p.width / 2, p.y + margin + 1.2);
   ctx.fillStyle = CONFIG.colors.buildArea;
   ctx.font = '600 ' + Math.round(camera.scale * 0.6) + 'px system-ui, sans-serif';
   ctx.textAlign = 'center';
@@ -201,7 +381,11 @@ function drawWorld(state) {
   drawCheckerboard(0, 0, w.width, w.height, col.grass, col.grassDark);
   drawCheckerboard(p.x, p.y, p.width, p.height, col.floor, col.floorDark);
   drawWalls();
-  drawBuildArea();
+  // show the "starts here" hint only while the shop is still empty
+  if (Object.keys(state.bought).length === 0) drawBuildArea();
+  drawPads(state);
+  drawBuiltItems(state);
   drawPlayer(state.player);
+  drawFloaters(state);
   drawJoystick(); // last, so it sits on top of everything
 }

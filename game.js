@@ -6,6 +6,11 @@
 var state = {
   cash: CONFIG.start.cash,  // coins the player has
   income: 0,                // coins earned per second (machines come later)
+  time: 0,                  // seconds since the game was opened (drives animations)
+
+  bought: {},               // which pads are bought, e.g. { counter: true }
+  builtAt: {},              // when each item was bought this session (for the pop-in)
+  floaters: [],             // floating "-25" texts currently on screen
 
   // the barista you walk around with
   player: {
@@ -55,8 +60,11 @@ function updatePlayer(dt) {
 
 // Advance the game by dt seconds.
 function update(dt) {
+  state.time += dt;
   updateInput();
   updatePlayer(dt);
+  tryBuyPads(state);
+  updateFloaters(state);
   followCamera(state.player, dt);
 }
 
@@ -78,5 +86,6 @@ function loop(now) {
 // ----- Start the game -----
 window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', onResize);
+rebuildSolids(state); // make already-bought items solid (matters once saving exists)
 onResize();
 requestAnimationFrame(loop);

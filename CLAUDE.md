@@ -104,7 +104,7 @@ Don't start the next part until the current one works and is committed.
       button), rotate overlay, shop floor drawn.
 - [x] **Part 2 — Player movement:** joystick + keys, barista character,
       camera follows, walls block movement.
-- [ ] **Part 3 — Buy pads:** step on a pad with enough cash to build a piece;
+- [x] **Part 3 — Buy pads:** step on a pad with enough cash to build a piece;
       cash shown in the HUD.
 - [ ] **Part 4 — Earning:** machines brew coins into the register; walk over
       the register to collect.
