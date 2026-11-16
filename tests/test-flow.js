@@ -33,6 +33,7 @@ function wantsSomethingIHave(c) { return c.orders.some(function (o) { return s.c
 
 function botThink() {
   if (s.time < bot.busyUntil) return;
+  if (s.padHold) return; // standing on a pad we can buy: wait for the ring to fill
   if (bot.plan) {
     // arrive
     if (bot.plan.what && bot.plan.what.customer) {
@@ -72,7 +73,7 @@ while (s.time < maxTime && ctx.getVisiblePads(s).length > 0) {
   ctx.updateMachines(s, dt);
   ctx.updateCustomers(s, dt);
   botThink();
-  var bought = ctx.tryBuyPads(s);
+  var bought = ctx.tryBuyPads(s, dt);
   if (bought) {
     ctx.repathCustomers(s);
     log.push(bought.id + '@' + (s.time / 60).toFixed(0));
@@ -235,11 +236,27 @@ check('Latte ★2 shows once the latte machine is built', ctx.isPadVisible(rq, l
 var ch = fresh(); ch.bought.cappuccino = true; ch.cash = 1e6; ctx.rebuildSolids(ch);
 var spot = ctx.getPad('espressoLv2').pad;
 ch.player.x = spot.x + spot.w / 2; ch.player.y = spot.y + spot.h / 2;
-for (k = 0; k < 10; k++) ctx.tryBuyPads(ch);
+var hold = C.buy.holdSeconds;
+ctx.tryBuyPads(ch, hold * 0.5);
+check('half the hold time: not bought yet, ring half full', !ch.bought.espressoLv2 && Math.abs(ctx.getPadHoldProgress(ch, ctx.getPad('espressoLv2')) - 0.5) < 1e-9);
+ctx.tryBuyPads(ch, hold * 0.6);
+check('full hold time: bought', ch.bought.espressoLv2 && !ch.padHold);
+for (k = 0; k < 100; k++) ctx.tryBuyPads(ch, hold);
 check('one step buys one upgrade, not the whole chain', ch.bought.espressoLv2 && !ch.bought.espressoLv3);
-ch.player.y += 3; ctx.tryBuyPads(ch); // step off...
-ch.player.y -= 3;                     // ...and back on
-check('stepping off and on again buys the next one', ctx.tryBuyPads(ch) && ch.bought.espressoLv3 && !ch.bought.cappuccinoLv2);
+ch.player.y += 3; ctx.tryBuyPads(ch, 0.1); // step off...
+ch.player.y -= 3;                          // ...and back on
+ctx.tryBuyPads(ch, hold * 0.9);
+ch.player.y += 3; ctx.tryBuyPads(ch, 0.1); // stepping off before the ring is full...
+ch.player.y -= 3;
+check('...empties the ring', !ch.padHold && !ch.bought.espressoLv3);
+ctx.tryBuyPads(ch, hold * 0.6);
+check('ring starts over after stepping off', !ch.bought.espressoLv3);
+ctx.tryBuyPads(ch, hold * 0.6);
+check('stepping off and on again buys the next one', ch.bought.espressoLv3 && !ch.bought.cappuccinoLv2);
+var broke = fresh(); broke.bought.cappuccino = true; broke.cash = 0; ctx.rebuildSolids(broke);
+broke.player.x = spot.x + spot.w / 2; broke.player.y = spot.y + spot.h / 2;
+ctx.tryBuyPads(broke, hold * 2);
+check('too poor: the ring does not fill', !broke.padHold && !broke.bought.espressoLv2);
 
 console.log(passes + ' flow checks passed, ' + fails + ' failed');
 process.exit(fails ? 1 : 0);

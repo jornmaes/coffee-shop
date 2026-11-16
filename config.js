@@ -149,8 +149,19 @@ var CONFIG = {
     seatOffset: 0.6,         // how far a chair is from the side of its table
   },
 
+  // --- Buying ---
+  buy: {
+    holdSeconds: 2,    // stand on a pad this long to buy it (a ring fills up around the pad)
+  },
+
+  // --- Testing ---
+  // Open the game as index.html?cheat to get money buttons in the ⚙ settings.
+  cheat: {
+    amounts: [1000, 10000, 100000, 1000000], // coins each button adds
+  },
+
   // --- Buy pads ---
-  // Walk onto a pad with enough cash to build its item.
+  // Walk onto a pad with enough cash and stand there a moment to build its item.
   // A pad only appears once the pad named in "requires" has been bought
   // (null = visible from the start). This makes the build order.
   //   id       unique name used in the save file (don't rename once players have saves)
@@ -521,6 +532,7 @@ var CONFIG = {
     padTooPricey: '#c9b9a3',// buy pad you can't afford yet
     padGold: '#f2c14e',    // expansion pad you can afford
     padUpgrade: '#8cc4ec', // upgrade pad you can afford
+    holdRing: '#5a3a28',   // the ring that fills up around a pad while you buy it
     upgradeText: '#3a78b0',// floating text when you buy a barista upgrade
     levelStar: '#f2b93b',  // the little stars on a leveled-up machine
     padText: '#3b2a20',    // text on and above pads

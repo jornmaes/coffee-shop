@@ -203,18 +203,22 @@ function getVisiblePads(state) {
   return CONFIG.pads.filter(function (pad) { return isPadVisible(state, pad); });
 }
 
-// Check if the player is standing on a pad they can afford, and buy it.
-// Returns the pad that was bought, or null.
-function tryBuyPads(state) {
+// Check if the player is standing on a pad they can afford, and buy it
+// once they've stood there for CONFIG.buy.holdSeconds (a ring fills up
+// around the pad meanwhile; see state.padHold). Returns the pad that was
+// bought, or null.
+function tryBuyPads(state, dt) {
   var player = state.player;
   // the player counts as "on" a pad once their middle half overlaps it
   var reach = player.radius * 0.5;
   var pads = getVisiblePads(state);
   // Pads that popped up right under the barista's feet (the next upgrade on
-  // the same spot) wait until the barista steps off them once. Otherwise one
-  // step could buy a whole chain of upgrades in a row.
+  // the same spot) wait until the barista steps off them once. Otherwise
+  // standing still would buy a whole chain of upgrades in a row.
   if (!state.padsUnderFeet) state.padsUnderFeet = {};
 
+  // find the pad the barista is standing on and can buy right now
+  var target = null;
   for (var i = 0; i < pads.length; i++) {
     var pad = pads[i];
     if (!overlapsRect(player.x, player.y, reach, pad.pad)) {
@@ -223,23 +227,40 @@ function tryBuyPads(state) {
     }
     if (state.padsUnderFeet[pad.id]) continue;
     if (state.cash < pad.price) continue; // not enough yet: nothing happens, no penalty
-
-    state.cash -= pad.price;
-    state.bought[pad.id] = true;
-    state.builtAt[pad.id] = state.time; // remembered for the pop-in animation
-    rebuildSolids(state);
-    // remember the new pads that just appeared under the barista
-    getVisiblePads(state).forEach(function (next) {
-      if (overlapsRect(player.x, player.y, reach, next.pad)) state.padsUnderFeet[next.id] = true;
-    });
-
-    // a little floating "-25" above the pad (nothing for free pads)
-    if (pad.price > 0) {
-      addFloater(state, '-' + formatNumber(pad.price), pad.pad.x + pad.pad.w / 2, pad.pad.y, CONFIG.colors.spend);
-    }
-    return pad;
+    target = pad;
+    break;
   }
-  return null;
+
+  // nothing to buy: the ring empties
+  if (!target) { state.padHold = null; return null; }
+
+  // keep standing on the same pad to fill the ring; a different pad starts over
+  if (!state.padHold || state.padHold.id !== target.id) state.padHold = { id: target.id, seconds: 0 };
+  state.padHold.seconds += dt;
+  if (state.padHold.seconds < CONFIG.buy.holdSeconds) return null;
+
+  // bought!
+  state.padHold = null;
+  state.cash -= target.price;
+  state.bought[target.id] = true;
+  state.builtAt[target.id] = state.time; // remembered for the pop-in animation
+  rebuildSolids(state);
+  // remember the new pads that just appeared under the barista
+  getVisiblePads(state).forEach(function (next) {
+    if (overlapsRect(player.x, player.y, reach, next.pad)) state.padsUnderFeet[next.id] = true;
+  });
+
+  // a little floating "-25" above the pad (nothing for free pads)
+  if (target.price > 0) {
+    addFloater(state, '-' + formatNumber(target.price), target.pad.x + target.pad.w / 2, target.pad.y, CONFIG.colors.spend);
+  }
+  return target;
+}
+
+// How full the "buying" ring around a pad is: 0 (empty) to 1 (bought).
+function getPadHoldProgress(state, pad) {
+  if (!state.padHold || state.padHold.id !== pad.id) return 0;
+  return Math.min(1, state.padHold.seconds / CONFIG.buy.holdSeconds);
 }
 
 // ---------- Floating texts ----------

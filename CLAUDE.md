@@ -10,9 +10,11 @@ and grow the shop piece by piece from an empty floor into a busy, cozy café.
   and layout are original):
   - Top-down 2D view of your shop. You control a barista character.
   - **Buy pads** are glowing tiles with a name and price. Walk onto one with
-    enough cash and that piece gets built (counter, coffee machines, tables,
-    decorations...). Each purchase reveals the **next pads**, so the shop grows
-    step by step along a build order.
+    enough cash and **stand on it for a moment** (a ring fills up around the
+    pad's border); then that piece gets built (counter, coffee machines,
+    tables, decorations...). Stepping off before the ring is full cancels it.
+    Each purchase reveals the **next pads**, so the shop grows step by step
+    along a build order.
 - **The serving loop** (the heart of the game):
   1. A customer only walks in if there is a **free seat** (they claim it on
      entry). If all seats are taken, nobody new comes in.
@@ -179,6 +181,8 @@ After **each part** of the roadmap:
    - Try the new feature, reload the page, and confirm progress was saved.
      To start over while testing, use ⚙ → Reset progress (or run
      `localStorage.removeItem('coffeeShopSave')` in the console and reload).
+     To test later parts quickly, open `index.html?cheat`: ⚙ then shows
+     buttons that add money (amounts in `CONFIG.cheat`).
 2. **Git commit** with a clear message describing the part (e.g.
    `Part 3: buy pads`), and tick the part off in the roadmap below.
 

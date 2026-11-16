@@ -239,6 +239,10 @@ function drawPads(state) {
       ctx.globalAlpha = 1;
     }
 
+    // the "buying" ring: fills up clockwise around the pad while you stand on it
+    var progress = getPadHoldProgress(state, pad);
+    if (progress > 0) drawHoldRing(s.x, s.y, w, h, k, progress);
+
     // price on the pad (upgrade pads get an arrow instead of the cup)
     ctx.fillStyle = col.padText;
     setFont(golden ? 0.62 : 0.55, 800);
@@ -246,6 +250,29 @@ function drawPads(state) {
     ctx.fillText(pad.price === 0 ? 'FREE' : icon + formatNumber(pad.price), s.x + w / 2, s.y + h / 2);
     ctx.restore();
   });
+}
+
+// A loading bar along the border of a pad (screen pixels x, y, w, h):
+// a faint track all the way round, and a bright line that grows clockwise
+// from the top-left corner as progress goes from 0 to 1.
+function drawHoldRing(x, y, w, h, k, progress) {
+  var pad = k * 0.1; // the ring sits just outside the pad
+  var rx = x - pad, ry = y - pad, rw = w + pad * 2, rh = h + pad * 2;
+  var r = Math.min(k * 0.33, rw / 2, rh / 2);
+  // length of the whole border: straight sides plus four quarter circles
+  var length = 2 * (rw + rh) - 8 * r + 2 * Math.PI * r;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(4, k * 0.17);
+  roundRectPath(rx, ry, rw, rh, r);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.stroke();
+  // a dashed line with one dash as long as the progress = a partial border
+  ctx.setLineDash([length * progress, length]);
+  ctx.strokeStyle = CONFIG.colors.holdRing;
+  roundRectPath(rx, ry, rw, rh, r);
+  ctx.stroke();
+  ctx.restore();
 }
 
 // The name labels above pads. Drawn after furniture and characters, so

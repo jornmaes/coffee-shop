@@ -251,6 +251,30 @@ function openSettings() {
   settingsEl.hidden = false;
 }
 
+// ----- Testing: money buttons -----
+// Opening the game as index.html?cheat (or index.html#cheat) shows buttons
+// in the settings panel that add coins, to try out later parts quickly.
+var cheatsOn = /cheat/.test(location.search + location.hash);
+
+// Make one button per amount in CONFIG.cheat.amounts.
+function setUpCheats() {
+  if (!cheatsOn) return;
+  document.getElementById('cheats').hidden = false;
+  var row = document.getElementById('cheat-buttons');
+  CONFIG.cheat.amounts.forEach(function (amount) {
+    var btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = '+' + formatNumber(amount);
+    btn.addEventListener('click', function () {
+      state.cash += amount;
+      save();
+      updateHud(0);
+    });
+    row.appendChild(btn);
+  });
+}
+setUpCheats();
+
 // Close the settings and carry on playing.
 function closeSettings() {
   settingsEl.hidden = true;
@@ -320,7 +344,7 @@ function update(dt) {
   updateMachines(state, dt);
   updateCustomers(state, dt);
 
-  var bought = tryBuyPads(state);
+  var bought = tryBuyPads(state, dt);
   if (bought) {
     repathCustomers(state); // nobody walks through the new item
     celebratePurchase(state, bought);
