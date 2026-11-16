@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Make app icons</title>
+<style>
+  body { background: #ddd; font-family: system-ui, sans-serif; }
+  canvas { margin: 8px; vertical-align: top; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 9px; }
+</style>
+</head>
+<body>
+<!--
+  Draws the home-screen icon with the game's own drawing code (art.js)
+  and shows it in three sizes. The PNGs in the project folder were made
+  from this page:
+    - open it in a browser and right-click → "Save image as…", or
+    - run headless Chrome with --dump-dom and decode the data URLs below.
+  Not loaded by the game.
+-->
+<div id="icons"></div>
+<pre id="out"></pre>
+
+<script src="../config.js"></script>
+<script>var ctx = null; // art.js draws on this global; set per icon below</script>
+<script src="../art.js"></script>
+<script>
+// The icon files to make: file name and size in pixels.
+var ICONS = [
+  { file: 'icon-512.png', size: 512 },
+  { file: 'icon-192.png', size: 192 },
+  { file: 'apple-touch-icon.png', size: 180 },
+];
+
+// Draw the icon on a square of `s` pixels.
+// The background fills the whole square (phones cut their own rounded
+// corners or circles out of it); the cup stays in the middle 70%, so
+// nothing important gets cut off.
+function drawIcon(s) {
+  // warm background: caramel in the middle fading to coffee brown
+  var bg = ctx.createRadialGradient(s * 0.5, s * 0.45, s * 0.05, s * 0.5, s * 0.5, s * 0.75);
+  bg.addColorStop(0, '#a8714a');
+  bg.addColorStop(1, '#3b2a20');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, s, s);
+
+  // a soft round glow behind the cup
+  fillCircle(s * 0.5, s * 0.53, s * 0.3, 'rgba(255, 238, 210, 0.9)');
+
+  // two curly steam wisps
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = s * 0.03;
+  ctx.lineCap = 'round';
+  [-0.06, 0.06].forEach(function (dx) {
+    var x = s * (0.47 + dx);
+    ctx.beginPath();
+    ctx.moveTo(x, s * 0.4);
+    ctx.bezierCurveTo(x - s * 0.05, s * 0.34, x + s * 0.05, s * 0.3, x, s * 0.23);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // the game's own hot chocolate mug (red, with a heart), drawn big
+  drawMenuItem('hotchoc', s * 0.47, s * 0.6, s * 0.56);
+
+  // a little heart and sparkles, for the cozy feeling
+  drawHeart(s * 0.75, s * 0.3, s * 0.06, '#f2c14e');
+  drawSparkle(s * 0.25, s * 0.32, s * 0.035, '#fffaf2');
+  drawSparkle(s * 0.78, s * 0.7, s * 0.03, '#fffaf2');
+}
+
+// Make each icon, show it, and list its PNG data.
+var lines = [];
+ICONS.forEach(function (icon) {
+  var canvas = document.createElement('canvas');
+  canvas.width = canvas.height = icon.size;
+  canvas.title = icon.file;
+  ctx = canvas.getContext('2d');
+  drawIcon(icon.size);
+  document.getElementById('icons').appendChild(canvas);
+  lines.push(icon.file + ' ' + canvas.toDataURL('image/png'));
+});
+document.getElementById('out').textContent = lines.join('\n');
+</script>
+</body>
+</html>
